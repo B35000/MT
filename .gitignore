@@ -12,5 +12,6 @@
 /captures
 .externalNativeBuild
 .cxx
-/app/src/main/java/com/color/airwork/Utilities/ApiStuff.kt
+/app/src/main/java/com/color/matt/Utilities/ApiStuff.kt
+/app/src/main/java/com/color/matt/Utilities/Apis.kt
 /app/src/main/res/values/maps_api_key.xml
