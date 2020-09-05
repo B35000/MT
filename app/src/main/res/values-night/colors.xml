@@ -1,23 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#158467</color>
-    <color name="colorPrimaryDark">#0B5642</color>
-    <color name="colorPrimaryLight">#C6C8CC</color>
-    <color name="colorAccent">#393E46</color>
+    <color name="colorPrimary">#FCFCFF</color>
+    <color name="colorPrimaryLight">#FCFDFF</color>
+    <color name="colorPrimaryDark">#292929</color>
+    <color name="colorAccent">#FCFCFF</color>
 
-    <color name="window_background">#EDEDED</color>
-    <color name="loading_background">#DCDCDC</color>
-    <color name="nav_bar_color">#EDEDED</color>
 
+    <color name="window_background">#333333</color>
+    <color name="nav_bar_color">#333333</color>
     <color name="app_green">#2b2b2b</color>
-    <color name="text_color">#808080</color>
-    <color name="card_back">#FFFFFF</color>
+    <color name="text_color">#CCCCCC</color>
+    <color name="card_back">#3C3C3C</color>
     <color name="hint_color">#808893</color>
 
-    <color name="new_loc_back">#A7A8AC</color>
+    <color name="new_loc_back">#919295</color>
     <color name="new_loc_back_selected">#393E46</color>
     <color name="new_loc_text_color">#FFFFFF</color>
-    <color name="route_color">#337820</color>
+    <color name="route_color">#FCFCFF</color>
 
     <color name="white">#FFFFFF</color>
     <color name="black">#121212</color>

@@ -5,6 +5,21 @@
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
+        <item name="android:navigationBarColor">@color/nav_bar_color</item>
+        <item name="android:textColor">@color/text_color</item>
     </style>
 
+    <style name="customSwitch" parent="Theme.AppCompat.Light"> <!--Theme for the app switch. Android switches use colorAccent but I wanted them to be using colorPrimary instead-->
+        <!-- active thumb & track color (30% transparency) -->
+        <item name="colorControlActivated">@color/colorPrimary</item>
+        <!-- inactive thumb color -->
+        <item name="colorSwitchThumbNormal">#f1f1f1</item>
+        <!-- inactive track color (30% transparency) -->
+        <item name="android:colorForeground">#CDCDCD</item>
+    </style>
+
+    <style name="SplashTheme" parent="Theme.AppCompat.NoActionBar"><!--For the splash screen specifically-->
+        <item name="android:windowBackground">@drawable/splash_background</item><!--The splash screen background is an xml file in drawable. Shows the app logo when the app starts up-->
+        <item name="android:navigationBarColor">@color/app_green</item>
+    </style>
 </resources>
