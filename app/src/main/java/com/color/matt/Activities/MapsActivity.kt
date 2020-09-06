@@ -28,6 +28,7 @@ import com.color.matt.Fragments.MainSettings
 import com.color.matt.R
 import com.color.matt.Utilities.Apis
 import com.color.matt.databinding.ActivityMapsBinding
+import com.color.mattdriver.Models.driver
 import com.color.mattdriver.Models.organisation
 import com.color.mattdriver.Models.route
 import com.google.android.gms.location.*
@@ -43,12 +44,15 @@ import com.google.android.libraries.places.api.net.PlacesClient
 import com.google.android.libraries.places.widget.Autocomplete
 import com.google.android.libraries.places.widget.AutocompleteActivity
 import com.google.android.libraries.places.widget.model.AutocompleteActivityMode
+import com.google.firebase.firestore.DocumentChange
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.google.gson.Gson
 import java.io.Serializable
 import java.util.*
 import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
 import kotlin.concurrent.schedule
 
 class MapsActivity : AppCompatActivity(),
@@ -74,6 +78,9 @@ class MapsActivity : AppCompatActivity(),
     val db = Firebase.firestore
     var organisations: ArrayList<organisation> = ArrayList()
     var routes: ArrayList<route> = ArrayList()
+    var positions: HashMap<String,ArrayList<driver_pos>> = HashMap()
+    var added_postitions: ArrayList<String> = ArrayList()
+    var driver_listeners: ArrayList<ListenerRegistration> = ArrayList()
 
     var mapView: View? = null
     val ZOOM = 15f
@@ -91,6 +98,7 @@ class MapsActivity : AppCompatActivity(),
         Log.e(TAG,"onCreate")
         super.onCreate(savedInstanceState)
         binding = ActivityMapsBinding.inflate(layoutInflater)
+
         setContentView(binding.root)
         val actionBar: ActionBar = supportActionBar!!
         actionBar.hide()
@@ -105,16 +113,11 @@ class MapsActivity : AppCompatActivity(),
         Places.initialize(applicationContext, Apis().places_api_key)
         val placesClient: PlacesClient = Places.createClient(this)
 
-        if(constants.SharedPreferenceManager(applicationContext).get_current_data().equals("")){
-            //first time, data has to be loaded
-            Log.e(TAG,"loading data from firestore")
-//            load_organisations()
-//            load_routes()
-        }else{
-            Log.e(TAG,"setting session data")
+        if(!constants.SharedPreferenceManager(applicationContext).get_current_data().equals("")){
             set_session_data()
-            Log.e("MapsAct","organisations are : ${organisations.size}")
+            set_up_driver_listeners(false)
         }
+        load_organisations()
 
         binding.settings.setOnClickListener {
             constants.touch_vibrate(applicationContext)
@@ -213,6 +216,224 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
+    fun load_organisations(){
+        val user = constants.SharedPreferenceManager(applicationContext).getPersonalInfo()!!
+
+        db.collection(constants.organisations)
+            .document(user.phone.country_name)
+            .collection(constants.country_organisations)
+            .get().addOnSuccessListener {
+                organisations.clear()
+                if(it.documents.isNotEmpty()){
+                    for(item in it.documents){
+                        val org_id = item["org_id"] as String
+                        val org_name = item["name"] as String
+                        val country = item["country"] as String
+                        val creation_time = item["creation_time"] as Long
+
+                        val org = organisation(org_name,creation_time)
+                        org.org_id = org_id
+                        org.country = country
+
+                        organisations.add(org)
+                    }
+                }
+                load_organisation_drivers()
+            }
+    }
+
+    var driver_iter = 0
+    fun load_organisation_drivers(){
+        driver_iter = 0
+        for(org in organisations){
+            val user = constants.SharedPreferenceManager(applicationContext).getPersonalInfo()!!
+            val time = Calendar.getInstance().timeInMillis
+            db.collection(constants.organisations)
+                .document(user.phone.country_name)
+                .collection(constants.country_organisations)
+                .document(org.org_id!!)
+                .collection(constants.drivers)
+                .get().addOnSuccessListener {
+                    if(!it.isEmpty){
+                        for(doc in it.documents) {
+                            val driver_id = doc["driver_id"] as String
+                            val org_id = doc["org_id"] as String
+                            val join_time = doc["join_time"] as Long
+
+                            val driver = driver(driver_id,org_id, join_time)
+                            for(item in organisations){
+                                if(item.org_id.equals(org_id)){
+                                    item.drivers.add(driver)
+                                }
+                            }
+                        }
+                    }
+                    driver_iter+=1
+                    if(driver_iter >= organisations.size){
+                        //were done
+                        load_routes()
+                    }
+                }.addOnFailureListener{
+                }
+        }
+    }
+
+    fun load_routes(){
+        val user = constants.SharedPreferenceManager(applicationContext).getPersonalInfo()!!
+
+        db.collection(constants.organisations)
+            .document(user.phone.country_name)
+            .collection(constants.country_routes)
+            .get().addOnSuccessListener {
+                routes.clear()
+                if(it.documents.isNotEmpty()){
+                    for(item in it.documents) {
+                        val organisation_id = item["organisation_id"] as String
+                        val creation_time = item["creation_time"] as Long
+                        val route_id = item["route_id"] as String
+                        val country = item["country"] as String
+                        val creater = item["creater"] as String
+
+                        val route = Gson().fromJson(item["route"].toString(), route::class.java)
+
+                        routes.add(route)
+                    }
+                }
+                store_session_data()
+                set_up_driver_listeners(false)
+            }
+    }
+
+    var org_pos = 0
+    fun load_all_drivers_first(){
+        org_pos = 0
+        for(org in organisations) {
+            db.collection(constants.organisations)
+                .document(org.country!!)
+                .collection(constants.country_organisations)
+                .document(org.org_id!!)
+                .collection(constants.driver_locations)
+                .get().addOnSuccessListener {
+                    if(!it.isEmpty){
+                        for(document in it.documents){
+                            val pos_id = document["pos_id"] as String
+                            val creation_time = document["creation_time"] as Long
+                            val user = document["user"] as String
+                            val loc = Gson().fromJson(document["loc"] as String, LatLng::class.java)
+                            val organisation = document["organisation"] as String
+                            val route = document["route"] as String
+
+                            val driverPos = driver_pos(pos_id,creation_time,user,loc,organisation,route)
+                            if(!is_location_contained(driverPos)){
+                                put_position_item(driverPos)
+                                added_postitions.add(driverPos.pos_id)
+                            }
+                        }
+                    }
+                    org_pos+=1
+                    if(org_pos>=organisations.size){
+                        //were done
+                        set_up_driver_listeners(true)
+                        if(positions.isNotEmpty())set_all_drivers()
+                    }
+                }
+        }
+    }
+
+    fun set_up_driver_listeners(has_attempted_to_load_driver_pos: Boolean){
+        if(positions.isEmpty() && !has_attempted_to_load_driver_pos){
+            load_all_drivers_first()
+        }else{
+            set_driver_listener_updates()
+        }
+    }
+
+    fun set_driver_listener_updates(){
+        remove_driver_liseners()
+        for(org in organisations){
+            val org_listener = db.collection(constants.organisations)
+                .document(org.country!!)
+                .collection(constants.country_organisations)
+                .document(org.org_id!!)
+                .collection(constants.driver_locations)
+                .addSnapshotListener { snapshots, e ->
+                    if (e != null) {
+                        Log.w(TAG, "listen:error", e)
+                        return@addSnapshotListener
+                    }
+
+                    for (dc in snapshots!!.documentChanges) {
+                        if(dc.type.equals(DocumentChange.Type.ADDED)){
+//                            Log.d(TAG, "New location: ${dc.document.data}")
+                        }else if(dc.type.equals(DocumentChange.Type.MODIFIED)){
+//                            Log.d(TAG, "Modified location: ${dc.document.data}")
+                        }else if(dc.type.equals(DocumentChange.Type.REMOVED)){
+//                            Log.d(TAG, "Removed location: ${dc.document.data}")
+                        }
+
+                        val pos_id = dc.document["pos_id"] as String
+                        val creation_time = dc.document["creation_time"] as Long
+                        val user = dc.document["user"] as String
+                        val loc = Gson().fromJson(dc.document["loc"] as String, LatLng::class.java)
+                        val organisation = dc.document["organisation"] as String
+                        val route = dc.document["route"] as String
+
+                        val driverPos = driver_pos(pos_id,creation_time,user,loc,organisation,route)
+                        if(!is_location_contained(driverPos)){
+                            put_position_item(driverPos)
+                            added_postitions.add(driverPos.pos_id)
+                            when_driver_position_updated(driverPos)
+                        }
+                    }
+            }
+            driver_listeners.add(org_listener)
+        }
+
+    }
+
+    fun remove_driver_liseners(){
+        if(driver_listeners.isNotEmpty()){
+            for(item in driver_listeners){
+                item.remove()
+            }
+            driver_listeners.clear()
+        }
+    }
+
+    fun when_driver_position_updated(driverPos: driver_pos){
+        Log.e(TAG,"Updated driver loc: ${driverPos.pos_id}")
+        set_drivers_on_map(driverPos.driver_id)
+    }
+
+    class driver_pos(var pos_id: String, var creation_time: Long, var driver_id: String, var loc: LatLng, var organisation_id: String, var route_id: String){
+
+    }
+
+    fun is_location_contained(driverPos: driver_pos): Boolean{
+//        for(item in positions){
+//            if(item.pos_id.equals(driverPos.pos_id)){
+//                return true
+//            }
+//        }
+        return added_postitions.contains(driverPos.pos_id)
+    }
+
+    fun put_position_item(locationPos: driver_pos){
+        if(positions.containsKey(locationPos.driver_id)){
+            positions.get(locationPos.driver_id)!!.add(locationPos)
+        }else{
+            val drivers_locations: ArrayList<driver_pos> = ArrayList()
+            drivers_locations.add(locationPos)
+            positions.put(locationPos.driver_id,drivers_locations)
+        }
+    }
+
+
+
+
+
+
+    //map part
 
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
@@ -239,8 +460,12 @@ class MapsActivity : AppCompatActivity(),
 
         binding.searchPlace.setOnClickListener{
             Constants().touch_vibrate(applicationContext)
+            val user = constants.SharedPreferenceManager(applicationContext).getPersonalInfo()
+
             val fields: List<Place.Field> = Arrays.asList(Place.Field.NAME, Place.Field.LAT_LNG)
-            val intent: Intent = Autocomplete.IntentBuilder(AutocompleteActivityMode.OVERLAY, fields).build(this)
+            val intent: Intent = Autocomplete.IntentBuilder(AutocompleteActivityMode.OVERLAY, fields)
+                .setCountry(user!!.phone.country_name_code)
+                .build(this)
             startActivityForResult(intent, AUTOCOMPLETE_REQUEST_CODE)
         }
 
@@ -283,7 +508,6 @@ class MapsActivity : AppCompatActivity(),
 
 
 
-    class session_data(var organisations: ArrayList<organisation>,var routes: ArrayList<route>): Serializable
 
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String?>, grantResults: IntArray) {
@@ -417,8 +641,11 @@ class MapsActivity : AppCompatActivity(),
         return (dp * Resources.getSystem().getDisplayMetrics().density).toInt()
     }
 
+
+    class session_data(var organisations: ArrayList<organisation>,var routes: ArrayList<route>, var postitions: HashMap<String,ArrayList<driver_pos>>): Serializable
+
     fun store_session_data(){
-        val session = Gson().toJson(session_data(organisations, routes))
+        val session = Gson().toJson(session_data(organisations, routes, positions))
         constants.SharedPreferenceManager(applicationContext).store_current_data(session)
     }
 
@@ -428,6 +655,13 @@ class MapsActivity : AppCompatActivity(),
             //its not empty
             var session_obj = Gson().fromJson(session,session_data::class.java)
             organisations = session_obj.organisations
+            positions = session_obj.postitions
+            added_postitions.clear()
+            for(item in positions.values){
+                for(pos in item){
+                    added_postitions.add(pos.pos_id)
+                }
+            }
             routes = session_obj.routes
         }
     }
@@ -443,6 +677,7 @@ class MapsActivity : AppCompatActivity(),
             mFusedLocationClient.removeLocationUpdates(locationCallback)
         }
         store_session_data()
+        remove_driver_liseners()
     }
 
     override fun onStop() {
@@ -478,6 +713,124 @@ class MapsActivity : AppCompatActivity(),
             supportFragmentManager.popBackStack()
 
         } else super.onBackPressed()
+    }
+
+
+
+    val driver_map_markers: HashMap<String, Marker> = HashMap()
+    val driver_map_marker_trail: HashMap<String, ArrayList<Circle>> = HashMap()
+    fun set_drivers_on_map(driver: String){
+        val drivers_last_locations = get_drivers_last_few_locations(positions.get(driver)!!)
+
+        val op = MarkerOptions().position(drivers_last_locations[drivers_last_locations.lastIndex].loc)
+        val final_icon: BitmapDrawable?  = getDrawable(R.drawable.bus_loc) as BitmapDrawable
+
+        val height = 108
+        val width = 55
+        if(final_icon!=null) {
+            val b: Bitmap = final_icon.bitmap
+            val smallMarker: Bitmap = Bitmap.createScaledBitmap(b, width, height, false)
+            op.icon(BitmapDescriptorFactory.fromBitmap(smallMarker))
+        }
+
+        if(driver_map_markers.containsKey(driver)){
+            driver_map_markers.get(driver)!!.remove()
+            driver_map_markers.remove(driver)
+        }
+
+        if(driver_map_marker_trail.containsKey(driver)){
+            for(circle in driver_map_marker_trail.get(driver)!!){
+                circle.remove()
+            }
+            driver_map_marker_trail.get(driver)!!.clear()
+            driver_map_marker_trail.remove(driver)
+        }
+
+        val driver_marker = mMap.addMarker(op)
+        driver_map_markers.put(driver,driver_marker)
+
+        for(last_loc in drivers_last_locations){
+            val circleOptions = CircleOptions()
+            circleOptions.center(last_loc.loc)
+            circleOptions.radius(1.0)
+            if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()) {
+                circleOptions.fillColor(Color.LTGRAY)
+            }else{
+                circleOptions.fillColor(Color.GREEN)
+            }
+            circleOptions.strokeWidth(0f)
+            val circle = mMap.addCircle(circleOptions)
+
+            if(!driver_map_marker_trail.containsKey(driver)){
+                driver_map_marker_trail.put(driver,ArrayList<Circle>())
+            }
+            driver_map_marker_trail.get(driver)!!.add(circle)
+        }
+    }
+
+    fun set_all_drivers(){
+        for(driver in positions.keys){
+            val drivers_last_locations = get_drivers_last_few_locations(positions.get(driver)!!)
+
+            val op = MarkerOptions().position(drivers_last_locations[drivers_last_locations.lastIndex].loc)
+            val final_icon: BitmapDrawable?  = getDrawable(R.drawable.bus_loc) as BitmapDrawable
+
+            val height = 108
+            val width = 55
+            if(final_icon!=null) {
+                val b: Bitmap = final_icon.bitmap
+                val smallMarker: Bitmap = Bitmap.createScaledBitmap(b, width, height, false)
+                op.icon(BitmapDescriptorFactory.fromBitmap(smallMarker))
+            }
+
+            if(driver_map_markers.containsKey(driver)){
+                driver_map_markers.get(driver)!!.remove()
+                driver_map_markers.remove(driver)
+            }
+
+            if(driver_map_marker_trail.containsKey(driver)){
+                for(circle in driver_map_marker_trail.get(driver)!!){
+                    circle.remove()
+                }
+                driver_map_marker_trail.get(driver)!!.clear()
+                driver_map_marker_trail.remove(driver)
+            }
+
+            val driver_marker = mMap.addMarker(op)
+            driver_map_markers.put(driver,driver_marker)
+
+            for(last_loc in drivers_last_locations){
+                val circleOptions = CircleOptions()
+                circleOptions.center(last_loc.loc)
+                circleOptions.radius(1.0)
+                if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()) {
+                    circleOptions.fillColor(Color.LTGRAY)
+                }else{
+                    circleOptions.fillColor(Color.GREEN)
+                }
+                circleOptions.strokeWidth(0f)
+                val circle = mMap.addCircle(circleOptions)
+
+                if(!driver_map_marker_trail.containsKey(driver)){
+                    driver_map_marker_trail.put(driver,ArrayList<Circle>())
+                }
+                driver_map_marker_trail.get(driver)!!.add(circle)
+            }
+        }
+    }
+
+
+    fun get_drivers_last_few_locations(drivers_positions: ArrayList<driver_pos>): ArrayList<driver_pos>{
+        val sorted_list: ArrayList<driver_pos> = ArrayList()
+        for(item in drivers_positions.sortedWith(compareBy({ it.creation_time }))){
+            sorted_list.add(item)
+        }
+
+        val last_3_list: ArrayList<driver_pos> = ArrayList()
+        last_3_list.addAll(sorted_list.takeLast(3))
+
+        return last_3_list
+
     }
 
 }

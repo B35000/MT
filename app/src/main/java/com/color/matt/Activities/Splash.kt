@@ -39,7 +39,7 @@ class Splash : AppCompatActivity() {
     private var mAuth: FirebaseAuth? = null
     val constants = Constants()
     var organisations: ArrayList<organisation> = ArrayList()
-    var my_organisations: ArrayList<String> = ArrayList()
+    var positions: HashMap<String,ArrayList<MapsActivity.driver_pos>> = HashMap()
     var routes: ArrayList<route> = ArrayList()
     val db = Firebase.firestore
 
@@ -48,6 +48,7 @@ class Splash : AppCompatActivity() {
         setContentView(R.layout.activity_splash)
         binding = ActivitySplashBinding.inflate(layoutInflater)
         setContentView(binding.root)
+//        constants.SharedPreferenceManager(applicationContext).store_current_data("")
 
         mAuth = FirebaseAuth.getInstance()
         GpsUtils(this).turnGPSOn(object : GpsUtils.onGpsListener {
@@ -215,7 +216,7 @@ class Splash : AppCompatActivity() {
 
     fun store_session_data(){
         val session = Gson().toJson(
-            MapsActivity.session_data(organisations, routes)
+            MapsActivity.session_data(organisations, routes, positions)
         )
         constants.SharedPreferenceManager(applicationContext).store_current_data(session)
     }
