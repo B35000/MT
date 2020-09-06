@@ -25,6 +25,7 @@ import androidx.core.app.ActivityCompat
 import androidx.interpolator.view.animation.LinearOutSlowInInterpolator
 import com.color.matt.Constants
 import com.color.matt.Fragments.MainSettings
+import com.color.matt.Fragments.ViewRoute
 import com.color.matt.R
 import com.color.matt.Utilities.Apis
 import com.color.matt.databinding.ActivityMapsBinding
@@ -32,11 +33,8 @@ import com.color.mattdriver.Models.driver
 import com.color.mattdriver.Models.organisation
 import com.color.mattdriver.Models.route
 import com.google.android.gms.location.*
+import com.google.android.gms.maps.*
 
-import com.google.android.gms.maps.CameraUpdateFactory
-import com.google.android.gms.maps.GoogleMap
-import com.google.android.gms.maps.OnMapReadyCallback
-import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.Place
@@ -54,6 +52,7 @@ import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 import kotlin.concurrent.schedule
+import com.google.maps.android.PolyUtil
 
 class MapsActivity : AppCompatActivity(),
     OnMapReadyCallback,
@@ -64,6 +63,7 @@ class MapsActivity : AppCompatActivity(),
 {
     val TAG = "MapsActivity"
     val _settings = "_settings"
+    val _view_route = "_view_route"
     private lateinit var mMap: GoogleMap
     private lateinit var binding: ActivityMapsBinding
     private lateinit var mFusedLocationClient: FusedLocationProviderClient
@@ -216,6 +216,9 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
+
+
+
     fun load_organisations(){
         val user = constants.SharedPreferenceManager(applicationContext).getPersonalInfo()!!
 
@@ -324,7 +327,7 @@ class MapsActivity : AppCompatActivity(),
                             val route = document["route"] as String
 
                             val driverPos = driver_pos(pos_id,creation_time,user,loc,organisation,route)
-                            if(!is_location_contained(driverPos)){
+                            if(!is_location_contained(driverPos) && Calendar.getInstance().timeInMillis-creation_time <= constants.update_limit){
                                 put_position_item(driverPos)
                                 added_postitions.add(driverPos.pos_id)
                             }
@@ -334,11 +337,15 @@ class MapsActivity : AppCompatActivity(),
                     if(org_pos>=organisations.size){
                         //were done
                         set_up_driver_listeners(true)
-                        if(positions.isNotEmpty())set_all_drivers()
+//                        if(positions.isNotEmpty())set_all_drivers()
                     }
                 }
         }
     }
+
+
+
+
 
     fun set_up_driver_listeners(has_attempted_to_load_driver_pos: Boolean){
         if(positions.isEmpty() && !has_attempted_to_load_driver_pos){
@@ -379,7 +386,7 @@ class MapsActivity : AppCompatActivity(),
                         val route = dc.document["route"] as String
 
                         val driverPos = driver_pos(pos_id,creation_time,user,loc,organisation,route)
-                        if(!is_location_contained(driverPos)){
+                        if(!is_location_contained(driverPos) && Calendar.getInstance().timeInMillis-creation_time <= constants.update_limit){
                             put_position_item(driverPos)
                             added_postitions.add(driverPos.pos_id)
                             when_driver_position_updated(driverPos)
@@ -443,13 +450,13 @@ class MapsActivity : AppCompatActivity(),
                 Log.e("mapp", "Style parsing failed.")
             }
         }
-
         mMap.setOnMyLocationClickListener(this)
 
         mMap.setOnMyLocationButtonClickListener(this)
         mMap.setMapType(GoogleMap.MAP_TYPE_NORMAL)
         mMap.setIndoorEnabled(false)
         mMap.setBuildingsEnabled(false)
+        mMap.setOnMarkerClickListener(this)
         mMap.uiSettings.isZoomControlsEnabled = true
         mMap.uiSettings.isCompassEnabled = true
 
@@ -468,6 +475,7 @@ class MapsActivity : AppCompatActivity(),
                 .build(this)
             startActivityForResult(intent, AUTOCOMPLETE_REQUEST_CODE)
         }
+
 
     }
 
@@ -502,8 +510,25 @@ class MapsActivity : AppCompatActivity(),
         return false
     }
 
-    override fun onMarkerClick(p0: Marker?): Boolean {
+    var viewed_driver = ""
+    override fun onMarkerClick(p: Marker?): Boolean {
+        move_camera(p!!.position)
+        for(item in driver_map_markers){
+            if(item.value.tag!!.equals(p.tag)){
+                if(viewed_driver.equals("")){
+                    draw_bus_route(item.key)
+                    set_bus_route_details(item.key)
+                }else{
+                    remove_bus_route()
+                    remove_bus_route_details()
+                }
+            }
+        }
        return false
+    }
+
+    fun move_camera(pos: LatLng){
+        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(pos, mMap.cameraPosition.zoom))
     }
 
 
@@ -702,6 +727,7 @@ class MapsActivity : AppCompatActivity(),
         super.onResume()
     }
 
+    private var doubleBackToExitPressedOnce = false
     override fun onBackPressed() {
         if (supportFragmentManager.fragments.size > 1) {
             val trans = supportFragmentManager.beginTransaction()
@@ -712,8 +738,19 @@ class MapsActivity : AppCompatActivity(),
             trans.commit()
             supportFragmentManager.popBackStack()
 
-        } else super.onBackPressed()
+        } else {
+            if (doubleBackToExitPressedOnce) {
+                super.onBackPressed()
+                return
+            }
+
+            this.doubleBackToExitPressedOnce = true
+            Toast.makeText(this, "Press BACK again to exit", Toast.LENGTH_SHORT).show()
+
+            Handler().postDelayed(Runnable { doubleBackToExitPressedOnce = false }, 2000)
+        }
     }
+
 
 
 
@@ -747,6 +784,7 @@ class MapsActivity : AppCompatActivity(),
         }
 
         val driver_marker = mMap.addMarker(op)
+        driver_marker.tag = driver
         driver_map_markers.put(driver,driver_marker)
 
         for(last_loc in drivers_last_locations){
@@ -819,7 +857,6 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
-
     fun get_drivers_last_few_locations(drivers_positions: ArrayList<driver_pos>): ArrayList<driver_pos>{
         val sorted_list: ArrayList<driver_pos> = ArrayList()
         for(item in drivers_positions.sortedWith(compareBy({ it.creation_time }))){
@@ -832,5 +869,180 @@ class MapsActivity : AppCompatActivity(),
         return last_3_list
 
     }
+
+
+
+
+
+    fun draw_bus_route(driver: String){
+        remove_bus_route()
+        val drivers_root = get_drivers_route(driver)
+        if(drivers_root!=null) {
+            val entire_path: MutableList<List<LatLng>> = ArrayList()
+            if (drivers_root.route_directions_data!!.routes.isNotEmpty()) {
+                val route = drivers_root.route_directions_data!!.routes[0]
+                for (leg in route.legs) {
+                    Log.e(TAG, "leg start adress: ${leg.start_address}")
+                    for (step in leg.steps) {
+                        Log.e(TAG, "step maneuver: ${step.maneuver}")
+                        val pathh: List<LatLng> = PolyUtil.decode(step.polyline.points)
+                        entire_path.add(pathh)
+                    }
+                }
+            }
+            draw_route(entire_path)
+            add_marker(drivers_root.set_start_pos!!, constants.start_loc, constants.start_loc)
+            add_marker(drivers_root.set_end_pos!!, constants.end_loc, constants.end_loc)
+            for (item in drivers_root.added_bus_stops) {
+                add_marker(item.stop_location, constants.stop_loc, item.creation_time.toString())
+            }
+            viewed_driver = driver
+            Handler().postDelayed({ show_all_markers() }, 500)
+        }
+    }
+
+    fun remove_bus_route(){
+        for(item in added_markers.values){
+            item.remove()
+        }
+        added_markers.clear()
+        remove_drawn_route()
+        viewed_driver = ""
+    }
+
+    val added_markers: HashMap<String,Marker> = HashMap()
+    fun add_marker(lat_lng:LatLng, type: String, name: String){
+        var op = MarkerOptions().position(lat_lng)
+        var final_icon: BitmapDrawable?  = null
+
+        if(type.equals(constants.start_loc)){
+            val icon = getDrawable(R.drawable.starting_location_pin) as BitmapDrawable
+            final_icon = icon
+        }
+        else if(type.equals(constants.end_loc)){
+            val icon = getDrawable(R.drawable.ending_location_pin) as BitmapDrawable
+            final_icon = icon
+        }
+        else if(type.equals(constants.stop_loc)){
+            val icon = getDrawable(R.drawable.stop_location_pin) as BitmapDrawable
+            final_icon = icon
+        }
+
+        val height = 95
+        val width = 35
+        if(final_icon!=null) {
+            val b: Bitmap = final_icon.bitmap
+            val smallMarker: Bitmap = Bitmap.createScaledBitmap(b, width, height, false)
+            op.icon(BitmapDescriptorFactory.fromBitmap(smallMarker))
+        }
+
+        if(added_markers.containsKey(name)){
+            added_markers.get(name)!!.remove()
+        }
+        val new_marker = mMap.addMarker(op)
+        added_markers.put(name, new_marker)
+    }
+
+    var drawn_polyline: ArrayList<Polyline> = ArrayList()
+    fun draw_route(entire_paths: MutableList<List<LatLng>>){
+        remove_drawn_route()
+        for (i in 0 until entire_paths.size) {
+            if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
+                val op = PolylineOptions()
+                    .addAll(entire_paths[i])
+                    .width(5f)
+                    .color(Color.WHITE)
+                drawn_polyline.add(mMap.addPolyline(op))
+            }else{
+                val op = PolylineOptions()
+                    .addAll(entire_paths[i])
+                    .width(5f)
+                    .color(Color.BLACK)
+                drawn_polyline.add(mMap.addPolyline(op))
+            }
+
+        }
+
+    }
+
+    fun remove_drawn_route(){
+        if(drawn_polyline.isNotEmpty()){
+            for(item in drawn_polyline){
+                item.remove()
+            }
+            drawn_polyline.clear()
+        }
+    }
+
+    fun get_drivers_route(driver_id: String): route?{
+        val last_route = get_drivers_last_few_locations(positions.get(driver_id)!!)
+        val route = last_route.get(last_route.lastIndex)
+
+        for(item in routes){
+            if(route.route_id.equals(item.route_id)){
+                return item
+            }
+        }
+
+        return null
+    }
+
+    fun show_all_markers(){
+        if(added_markers.values.isNotEmpty()) {
+            val builder: LatLngBounds.Builder = LatLngBounds.Builder()
+            for (marker in added_markers.values) {
+                builder.include(marker.position)
+            }
+            val bounds = builder.build()
+            val padding = dpToPx(120)
+            val cu: CameraUpdate = CameraUpdateFactory.newLatLngBounds(bounds, padding)
+            mMap.animateCamera(cu)
+        }
+    }
+
+    fun set_bus_route_details(driver: String){
+        val route = get_drivers_route(driver)
+        val orga = get_route_org(get_drivers_route(driver)!!)!!
+
+        binding.title.text = "On Route"
+        binding.sourceTextview.text = "From: ${route!!.starting_pos_desc}"
+        binding.destinationTextview.text = "To: ${route!!.ending_pos_desc}"
+        binding.viewLayout.visibility = View.VISIBLE
+
+        binding.viewLayout.setOnClickListener {
+            constants.touch_vibrate(applicationContext)
+            val r = Gson().toJson(route)
+            val d = Gson().toJson(get_org_driver(orga, driver)!!)
+            val o = Gson().toJson(orga)
+            supportFragmentManager.beginTransaction().setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left)
+                .replace(binding.money.id,ViewRoute.newInstance("","", o, r, d),_view_route).commit()
+        }
+    }
+
+    fun remove_bus_route_details(){
+        binding.title.text = "Click a bus icon"
+        binding.sourceTextview.text = "To see the route it's going"
+        binding.destinationTextview.text = ""
+        binding.viewLayout.visibility = View.GONE
+    }
+
+    fun get_route_org(route: route): organisation?{
+        for(organ in organisations){
+            if(organ.org_id.equals(route.org_id)){
+                return organ
+            }
+        }
+        return null
+    }
+
+    fun get_org_driver(org: organisation, driver_id: String): driver?{
+        for(driv in org.drivers){
+            if(driv.driver_id.equals(driver_id)){
+                return driv
+            }
+        }
+        return null
+    }
+
 
 }

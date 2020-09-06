@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".Fragments.ViewRoute">
+
+    <RelativeLayout
+        android:id="@+id/money"
+        android:layout_width="match_parent"
+        android:background="@color/window_background"
+        android:layout_height="match_parent"/>
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_marginHorizontal="25dp"
+        android:layout_marginTop="20dp"
+        android:layout_marginBottom="2dp"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:orientation="vertical"
+            android:layout_height="match_parent">
+
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <TextView
+                    android:id="@+id/title"
+                    android:layout_width="wrap_content"
+                    android:textSize="22sp"
+                    android:textColor="@color/colorAccent"
+                    android:textStyle="bold"
+                    android:layout_height="wrap_content"
+                    android:text="Driver's Route" />
+
+                <RelativeLayout
+                    android:id="@+id/set_route_layout"
+                    android:layout_width="wrap_content"
+                    android:layout_alignParentEnd="true"
+                    android:visibility="gone"
+                    android:paddingBottom="5dp"
+                    android:paddingTop="5dp"
+                    android:layout_height="wrap_content">
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center"
+                        android:layout_height="wrap_content">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:textSize="15sp"
+                            android:layout_gravity="center_vertical"
+                            android:textColor="@color/colorPrimary"
+                            android:layout_height="wrap_content"
+                            android:text="Set" />
+
+
+                        <ImageView
+                            android:layout_width="19dp"
+                            android:layout_gravity="center_vertical"
+                            android:layout_marginStart="5dp"
+                            android:translationY="1dp"
+                            android:src="@drawable/next_arrow"
+                            android:layout_height="16dp"/>
+
+                    </LinearLayout>
+
+                </RelativeLayout>
+
+            </RelativeLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_marginTop="5dp"
+                android:textSize="15sp"
+                android:layout_height="wrap_content"
+                android:text="Details about the route of the driver." />
+
+
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_marginTop="20dp"
+                android:layout_height="wrap_content">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_height="wrap_content">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_marginTop="5dp"
+                        android:layout_marginEnd="40dp"
+                        android:textSize="16sp"
+                        android:textColor="@color/colorAccent"
+                        android:layout_height="wrap_content"
+                        android:text="From" />
+
+                    <TextView
+                        android:id="@+id/source_text"
+                        android:layout_width="wrap_content"
+                        android:layout_marginTop="5dp"
+                        android:layout_marginEnd="40dp"
+                        android:textSize="14sp"
+                        android:layout_height="wrap_content"
+                        android:text="Odeon plaza blab blah" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_marginTop="25dp"
+                        android:layout_marginEnd="40dp"
+                        android:textSize="16sp"
+                        android:textColor="@color/colorAccent"
+                        android:layout_height="wrap_content"
+                        android:text="To" />
+
+                    <TextView
+                        android:id="@+id/destination_text"
+                        android:layout_width="wrap_content"
+                        android:layout_marginTop="5dp"
+                        android:layout_marginEnd="40dp"
+                        android:textSize="14sp"
+                        android:layout_height="wrap_content"
+                        android:text="Odeon plaza blab blah" />
+
+                    <TextView
+                        android:id="@+id/stops_text"
+                        android:layout_width="wrap_content"
+                        android:layout_marginTop="5dp"
+                        android:layout_marginEnd="40dp"
+                        android:textSize="12sp"
+                        android:layout_height="wrap_content"
+                        android:text="" />
+
+
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="25dp"
+                    android:layout_alignParentEnd="true"
+                    android:layout_centerVertical="true"
+                    android:src="@drawable/route_overview_icon"
+                    android:layout_height="125dp"/>
+
+            </RelativeLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:background="@color/colorAccent"
+                android:alpha="0.4"
+                android:layout_marginTop="30dp"
+                android:layout_height="1dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_marginTop="30dp"
+                android:layout_marginEnd="40dp"
+                android:textSize="16sp"
+                android:textColor="@color/colorAccent"
+                android:layout_height="wrap_content"
+                android:text="By" />
+
+            <TextView
+                android:id="@+id/organisation_name"
+                android:layout_width="wrap_content"
+                android:layout_marginTop="5dp"
+                android:layout_marginEnd="40dp"
+                android:textSize="14sp"
+                android:layout_height="wrap_content"
+                android:text="Killeton Bus Services" />
+
+
+        </LinearLayout>
+
+    </RelativeLayout>
+
+</FrameLayout>

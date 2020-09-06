@@ -41,6 +41,7 @@ class Constants {
     val doc_phone = "doc_phone"
     val pass = "gHH5SGcFemdzqHmNCbjy3AHWiun1"
     val drivers = "drivers"
+    val update_limit: Long = (60*1000)
 
     fun touch_vibrate(context: Context?){
         val vibrator = context?.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
