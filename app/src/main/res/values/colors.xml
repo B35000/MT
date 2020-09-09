@@ -29,4 +29,6 @@
     <color name="indigo">#4c00a9</color>
     <color name="grey">#E9E9E9</color>
 
+    <color name="splash_nav_bar">#158467</color>
+
 </resources>

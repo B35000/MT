@@ -264,10 +264,8 @@ class MapsActivity : AppCompatActivity(),
                             val join_time = doc["join_time"] as Long
 
                             val driver = driver(driver_id,org_id, join_time)
-                            for(item in organisations){
-                                if(item.org_id.equals(org_id)){
-                                    item.drivers.add(driver)
-                                }
+                            if(org.org_id.equals(org_id)){
+                                org.drivers.add(driver)
                             }
                         }
                     }
@@ -298,6 +296,11 @@ class MapsActivity : AppCompatActivity(),
                         val creater = item["creater"] as String
 
                         val route = Gson().fromJson(item["route"].toString(), route::class.java)
+                        var disabled = false
+                        if(item.contains("disabled")){
+                            disabled = item["disabled"] as Boolean
+                        }
+                        route.disabled = disabled
 
                         routes.add(route)
                     }
@@ -485,9 +488,7 @@ class MapsActivity : AppCompatActivity(),
             if (resultCode == Activity.RESULT_OK) {
                 val place: Place = Autocomplete.getPlaceFromIntent(data!!)
                 Log.e("MapActivity", "Place: " + place.name+" and latlng: "+place.latLng!!.latitude)
-
-//                if(place.name!=null)selectedAreaDescription = place.name.toString()
-                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(place.latLng!!.latitude, place.latLng!!.longitude), mMap.cameraPosition.zoom))
+                when_search_place_result_gotten(place)
                 whenNetworkAvailable()
             }
             else if (resultCode == AutocompleteActivity.RESULT_ERROR) {
@@ -545,7 +546,7 @@ class MapsActivity : AppCompatActivity(),
                 ) {
                     set_up_getting_my_location()
                 } else {
-                    Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show()
+//                    Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -890,6 +891,7 @@ class MapsActivity : AppCompatActivity(),
                     }
                 }
             }
+            remove_drawn_route()
             draw_route(entire_path)
             add_marker(drivers_root.set_start_pos!!, constants.start_loc, constants.start_loc)
             add_marker(drivers_root.set_end_pos!!, constants.end_loc, constants.end_loc)
@@ -945,7 +947,7 @@ class MapsActivity : AppCompatActivity(),
 
     var drawn_polyline: ArrayList<Polyline> = ArrayList()
     fun draw_route(entire_paths: MutableList<List<LatLng>>){
-        remove_drawn_route()
+
         for (i in 0 until entire_paths.size) {
             if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
                 val op = PolylineOptions()
@@ -1042,6 +1044,15 @@ class MapsActivity : AppCompatActivity(),
             }
         }
         return null
+    }
+
+
+    fun when_search_place_result_gotten(place: Place){
+        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(place.latLng!!.latitude, place.latLng!!.longitude), mMap.cameraPosition.zoom))
+        whenNetworkAvailable()
+
+
+
     }
 
 

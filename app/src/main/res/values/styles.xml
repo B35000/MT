@@ -20,6 +20,6 @@
 
     <style name="SplashTheme" parent="Theme.AppCompat.NoActionBar"><!--For the splash screen specifically-->
         <item name="android:windowBackground">@drawable/splash_background</item><!--The splash screen background is an xml file in drawable. Shows the app logo when the app starts up-->
-        <item name="android:navigationBarColor">@color/app_green</item>
+        <item name="android:navigationBarColor">@color/splash_nav_bar</item>
     </style>
 </resources>
