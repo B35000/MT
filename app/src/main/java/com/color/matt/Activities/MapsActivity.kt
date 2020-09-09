@@ -16,11 +16,11 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.*
-import androidx.appcompat.app.AppCompatActivity
 import android.util.Log
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.ActionBar
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.interpolator.view.animation.LinearOutSlowInInterpolator
 import com.color.matt.Constants
@@ -34,7 +34,6 @@ import com.color.mattdriver.Models.organisation
 import com.color.mattdriver.Models.route
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.*
-
 import com.google.android.gms.maps.model.*
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.Place
@@ -47,12 +46,12 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.google.gson.Gson
+import com.google.maps.android.PolyUtil
 import java.io.Serializable
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 import kotlin.concurrent.schedule
-import com.google.maps.android.PolyUtil
 
 class MapsActivity : AppCompatActivity(),
     OnMapReadyCallback,
@@ -477,6 +476,7 @@ class MapsActivity : AppCompatActivity(),
                 .setCountry(user!!.phone.country_name_code)
                 .build(this)
             startActivityForResult(intent, AUTOCOMPLETE_REQUEST_CODE)
+            remove_multiple_routes()
         }
 
 
@@ -892,7 +892,11 @@ class MapsActivity : AppCompatActivity(),
                 }
             }
             remove_drawn_route()
-            draw_route(entire_path)
+            var c = Color.BLACK
+            if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
+                c = Color.WHITE
+            }
+            draw_route(entire_path, c)
             add_marker(drivers_root.set_start_pos!!, constants.start_loc, constants.start_loc)
             add_marker(drivers_root.set_end_pos!!, constants.end_loc, constants.end_loc)
             for (item in drivers_root.added_bus_stops) {
@@ -946,20 +950,19 @@ class MapsActivity : AppCompatActivity(),
     }
 
     var drawn_polyline: ArrayList<Polyline> = ArrayList()
-    fun draw_route(entire_paths: MutableList<List<LatLng>>){
-
+    fun draw_route(entire_paths: MutableList<List<LatLng>>, color: Int){
         for (i in 0 until entire_paths.size) {
             if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
                 val op = PolylineOptions()
                     .addAll(entire_paths[i])
                     .width(5f)
-                    .color(Color.WHITE)
+                    .color(color)
                 drawn_polyline.add(mMap.addPolyline(op))
             }else{
                 val op = PolylineOptions()
                     .addAll(entire_paths[i])
                     .width(5f)
-                    .color(Color.BLACK)
+                    .color(color)
                 drawn_polyline.add(mMap.addPolyline(op))
             }
 
@@ -974,6 +977,10 @@ class MapsActivity : AppCompatActivity(),
             }
             drawn_polyline.clear()
         }
+        for(item in search_place_circle){
+            item.remove()
+        }
+        search_place_circle.clear()
     }
 
     fun get_drivers_route(driver_id: String): route?{
@@ -1047,13 +1054,144 @@ class MapsActivity : AppCompatActivity(),
     }
 
 
+    var search_place_circle: ArrayList<Circle> = ArrayList()
     fun when_search_place_result_gotten(place: Place){
         mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(place.latLng!!.latitude, place.latLng!!.longitude), mMap.cameraPosition.zoom))
         whenNetworkAvailable()
 
+        if(mLastKnownLocations.isNotEmpty()){
+            val user_loc = mLastKnownLocations.get(mLastKnownLocations.lastIndex)
+            val user_lat_lg = LatLng(user_loc.latitude,user_loc.longitude)
 
+            val lat_lng = place.latLng!!
+            var closest_routes:ArrayList<route> = ArrayList()
+            var closest_to_me_routes:ArrayList<String> = ArrayList()
+            for(route in routes){
+                val clos_dis = get_closest_distance_to_route(route,lat_lng)
+                val clos_to_me = get_closest_distance_to_route(route,user_lat_lg)
+                if(clos_dis<=constants.search_distance_threshold || clos_to_me<=constants.search_distance_threshold ){
+                    closest_routes.add(route)
+                    closest_to_me_routes.add(route.route_id)
+                }
+            }
+            load_multiple_routes(closest_routes,lat_lng,user_lat_lg,closest_to_me_routes)
+
+            //        val rad = 300.0
+            val rad = constants.search_distance_threshold.toDouble()
+            var circleOptions = CircleOptions()
+            circleOptions.center(place.latLng!!)
+            circleOptions.radius(rad)
+            circleOptions.fillColor(Color.parseColor("#2271cce7"))
+            circleOptions.strokeWidth(0f)
+
+            search_place_circle.add(mMap.addCircle(circleOptions))
+
+            circleOptions = CircleOptions()
+            circleOptions.center(user_lat_lg)
+            circleOptions.radius(rad)
+            circleOptions.fillColor(Color.parseColor("#2271cce7"))
+            circleOptions.strokeWidth(0f)
+
+            search_place_circle.add(mMap.addCircle(circleOptions))
+        }
 
     }
 
+    fun get_closest_distance_to_route(set_route :route, my_location:LatLng) : Long {
+        val entire_path: MutableList<List<LatLng>> = ArrayList()
+        if (set_route.route_directions_data!!.routes.isNotEmpty()) {
+            val route = set_route.route_directions_data!!.routes[0]
+            for (leg in route.legs) {
+                Log.e(TAG, "leg start adress: ${leg.start_address}")
+                for (step in leg.steps) {
+                    Log.e(TAG, "step maneuver: ${step.maneuver}")
+                    val pathh: List<LatLng> = PolyUtil.decode(step.polyline.points)
+                    entire_path.add(pathh)
+                }
+            }
+        }
+
+        var closest_point = entire_path[0][0]
+        var its_distance_to_me = distance_to(closest_point, my_location)
+        for(path in entire_path){
+            for(point in path){
+                if(distance_to(point, my_location)<its_distance_to_me){
+                    //this point is shorter
+                    closest_point = point
+                    its_distance_to_me = distance_to(point, my_location)
+                }
+            }
+        }
+
+        return its_distance_to_me
+    }
+
+    fun distance_to(lat_lng: LatLng, other_lat_lng: LatLng): Long{
+        val loc1 = Location("")
+        loc1.latitude = lat_lng.latitude
+        loc1.longitude = lat_lng.longitude
+
+        val loc2 = Location("")
+        loc2.latitude = other_lat_lng.latitude
+        loc2.longitude = other_lat_lng.longitude
+
+        val distanceInMeters = loc1.distanceTo(loc2)
+        return distanceInMeters.toLong()
+    }
+
+
+    var is_showing_multiple_routes = false
+    var open_bus_route = ""
+    fun load_multiple_routes(routes: ArrayList<route>, lat_lng: LatLng, my_lat_lng: LatLng, closest_to_me_routes:ArrayList<String> ){
+        remove_bus_route()
+        remove_drawn_route()
+        add_marker(lat_lng, constants.end_loc, constants.end_loc)
+        add_marker(my_lat_lng, constants.start_loc, constants.start_loc)
+        for(drivers_root in routes){
+            val entire_path: MutableList<List<LatLng>> = ArrayList()
+            if (drivers_root.route_directions_data!!.routes.isNotEmpty()) {
+                val route = drivers_root.route_directions_data!!.routes[0]
+                for (leg in route.legs) {
+                    Log.e(TAG, "leg start adress: ${leg.start_address}")
+                    for (step in leg.steps) {
+                        Log.e(TAG, "step maneuver: ${step.maneuver}")
+                        val pathh: List<LatLng> = PolyUtil.decode(step.polyline.points)
+                        entire_path.add(pathh)
+                    }
+                }
+            }
+            val random = Random()
+            var cc = Color.argb(255, random.nextInt(256), random.nextInt(256), random.nextInt(256))
+//            if(closest_to_me_routes.contains(drivers_root.route_id)){
+//                cc = Color.argb(255, random.nextInt(256), random.nextInt(256), random.nextInt(256))
+//            }
+            draw_route(entire_path,cc)
+//            add_marker(drivers_root.set_start_pos!!, constants.start_loc, constants.start_loc)
+
+            for (item in drivers_root.added_bus_stops) {
+//                add_marker(item.stop_location, constants.stop_loc, item.creation_time.toString())
+            }
+        }
+        Handler().postDelayed({ show_all_markers() }, 500)
+        is_showing_multiple_routes = true
+    }
+
+    fun remove_multiple_routes(){
+        if(is_showing_multiple_routes) {
+            is_showing_multiple_routes = false
+
+            for (item in added_markers.values) {
+                item.remove()
+            }
+            added_markers.clear()
+            remove_drawn_route()
+
+//            if(open_bus_route.equals(""))draw_bus_route(open_bus_route)
+            for(item in search_place_circle){
+                item.remove()
+            }
+            search_place_circle.clear()
+        }
+    }
 
 }
