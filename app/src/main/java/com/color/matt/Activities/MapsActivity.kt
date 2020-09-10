@@ -1079,7 +1079,7 @@ class MapsActivity : AppCompatActivity(),
     var is_picking_source_location = false
     var is_location_picker_open = true
     fun when_search_place_result_gotten(place: Place){
-        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(place.latLng!!.latitude, place.latLng!!.longitude), mMap.cameraPosition.zoom))
+//        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(place.latLng!!.latitude, place.latLng!!.longitude), mMap.cameraPosition.zoom))
         whenNetworkAvailable()
         remove_bus_route_details()
 
@@ -1134,7 +1134,7 @@ class MapsActivity : AppCompatActivity(),
 //        binding.finishCreateRoute.visibility = View.VISIBLE
         binding.setLocationPin.visibility = View.VISIBLE
         binding.searchPlace.visibility = View.GONE
-        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(mMap.cameraPosition.target, ZOOM_FOCUSED))
+//        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(mMap.cameraPosition.target, ZOOM_FOCUSED))
         is_location_picker_open = true
 
     }
@@ -1246,6 +1246,7 @@ class MapsActivity : AppCompatActivity(),
     var selected_route: route? = null
     val search_loaded_route_colors: HashMap<String,Int> = HashMap()
     val search_loaded_routes: ArrayList<route> = ArrayList()
+    var item_pos = 0
     internal inner class newBusStopsListAdapter(val place: Place): RecyclerView.Adapter<ViewHolderRoutes>() {
 
         override fun onCreateViewHolder(viewGroup: ViewGroup, viewType: Int): ViewHolderRoutes {
@@ -1260,7 +1261,7 @@ class MapsActivity : AppCompatActivity(),
                 if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
                     item_color = Color.LTGRAY
                 }else{
-                    item_color = Color.DKGRAY
+                    item_color = Color.GRAY
                 }
             }
 
@@ -1278,12 +1279,14 @@ class MapsActivity : AppCompatActivity(),
             v.route_card.setCardBackgroundColor(item_color!!)
 
             v.loaded_route_relative.setOnClickListener {
+                item_pos = position
                 if(selected_route==null){
                     selected_route = item
                     draw_specific_route(item,item_color)
 
                     binding.searchedRoutesRecyclerview.adapter = newBusStopsListAdapter(place)
                     binding.searchedRoutesRecyclerview.layoutManager = LinearLayoutManager(applicationContext,LinearLayoutManager.HORIZONTAL, false)
+                    binding.searchedRoutesRecyclerview.scrollToPosition(item_pos)
                 }else{
                     selected_route = null
                     when_search_place_result_gotten(place)
@@ -1329,10 +1332,14 @@ class MapsActivity : AppCompatActivity(),
                 }
             }
             val random = Random()
+            Log.e(TAG,"random number ${random}")
             var cc = Color.argb(255, random.nextInt(256), random.nextInt(256), random.nextInt(256))
-//            if(closest_to_me_routes.contains(drivers_root.route_id)){
-//                cc = Color.argb(255, random.nextInt(256), random.nextInt(256), random.nextInt(256))
+//            if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
+//                cc = Color.argb(255, (random.nextInt(186)+30), random.nextInt(186)+70, random.nextInt(186)+70)
+//            }else{
+//                cc = Color.argb(255, Math.abs(random.nextInt(336)-30), Math.abs(random.nextInt(336)-70), Math.abs(random.nextInt(336)-70))
 //            }
+
             search_loaded_routes.add(drivers_root)
             if(!search_loaded_route_colors.containsKey(drivers_root.route_id)){
                 search_loaded_route_colors.put(drivers_root.route_id, cc)
@@ -1367,6 +1374,7 @@ class MapsActivity : AppCompatActivity(),
         binding.searchedRoutesRecyclerview.visibility = View.VISIBLE
         binding.searchedRoutesRecyclerview.adapter = newBusStopsListAdapter(place)
         binding.searchedRoutesRecyclerview.layoutManager = LinearLayoutManager(applicationContext,LinearLayoutManager.HORIZONTAL, false)
+        binding.searchedRoutesRecyclerview.scrollToPosition(item_pos)
     }
 
     fun remove_multiple_routes(){
