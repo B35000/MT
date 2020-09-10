@@ -17,12 +17,20 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.*
 import android.util.Log
+import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.RelativeLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.ActionBar
 import androidx.appcompat.app.AppCompatActivity
+import androidx.cardview.widget.CardView
 import androidx.core.app.ActivityCompat
 import androidx.interpolator.view.animation.LinearOutSlowInInterpolator
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.color.matt.Constants
 import com.color.matt.Fragments.MainSettings
 import com.color.matt.Fragments.ViewRoute
@@ -41,6 +49,7 @@ import com.google.android.libraries.places.api.net.PlacesClient
 import com.google.android.libraries.places.widget.Autocomplete
 import com.google.android.libraries.places.widget.AutocompleteActivity
 import com.google.android.libraries.places.widget.model.AutocompleteActivityMode
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.ktx.firestore
@@ -48,6 +57,7 @@ import com.google.firebase.ktx.Firebase
 import com.google.gson.Gson
 import com.google.maps.android.PolyUtil
 import java.io.Serializable
+import java.math.RoundingMode
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
@@ -488,6 +498,7 @@ class MapsActivity : AppCompatActivity(),
             if (resultCode == Activity.RESULT_OK) {
                 val place: Place = Autocomplete.getPlaceFromIntent(data!!)
                 Log.e("MapActivity", "Place: " + place.name+" and latlng: "+place.latLng!!.latitude)
+                custom_set_start_loc = null
                 when_search_place_result_gotten(place)
                 whenNetworkAvailable()
             }
@@ -730,25 +741,32 @@ class MapsActivity : AppCompatActivity(),
 
     private var doubleBackToExitPressedOnce = false
     override fun onBackPressed() {
-        if (supportFragmentManager.fragments.size > 1) {
-            val trans = supportFragmentManager.beginTransaction()
-            trans.setCustomAnimations(R.anim.slide_in_left, R.anim.slide_out_right)
-            val currentFragPos = supportFragmentManager.fragments.size - 1
-
-            trans.remove(supportFragmentManager.fragments.get(currentFragPos))
-            trans.commit()
-            supportFragmentManager.popBackStack()
-
+        if(is_location_picker_open){
+            close_location_picker()
+        } else if(is_showing_multiple_routes){
+            remove_multiple_routes()
+            binding.findMeCardview.performClick()
         } else {
-            if (doubleBackToExitPressedOnce) {
-                super.onBackPressed()
-                return
+            if (supportFragmentManager.fragments.size > 1) {
+                val trans = supportFragmentManager.beginTransaction()
+                trans.setCustomAnimations(R.anim.slide_in_left, R.anim.slide_out_right)
+                val currentFragPos = supportFragmentManager.fragments.size - 1
+
+                trans.remove(supportFragmentManager.fragments.get(currentFragPos))
+                trans.commit()
+                supportFragmentManager.popBackStack()
+
+            } else {
+                if (doubleBackToExitPressedOnce) {
+                    super.onBackPressed()
+                    return
+                }
+
+                this.doubleBackToExitPressedOnce = true
+                Toast.makeText(this, "Press BACK again to exit", Toast.LENGTH_SHORT).show()
+
+                Handler().postDelayed(Runnable { doubleBackToExitPressedOnce = false }, 2000)
             }
-
-            this.doubleBackToExitPressedOnce = true
-            Toast.makeText(this, "Press BACK again to exit", Toast.LENGTH_SHORT).show()
-
-            Handler().postDelayed(Runnable { doubleBackToExitPressedOnce = false }, 2000)
         }
     }
 
@@ -1015,7 +1033,7 @@ class MapsActivity : AppCompatActivity(),
 
         binding.title.text = "On Route"
         binding.sourceTextview.text = "From: ${route!!.starting_pos_desc}"
-        binding.destinationTextview.text = "To: ${route!!.ending_pos_desc}"
+        binding.destinationTextview.text = "To: ${route.ending_pos_desc}"
         binding.viewLayout.visibility = View.VISIBLE
 
         binding.viewLayout.setOnClickListener {
@@ -1054,47 +1072,132 @@ class MapsActivity : AppCompatActivity(),
     }
 
 
+
+
     var search_place_circle: ArrayList<Circle> = ArrayList()
+    var custom_set_start_loc: LatLng? = null
+    var is_picking_source_location = false
+    var is_location_picker_open = true
     fun when_search_place_result_gotten(place: Place){
         mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(place.latLng!!.latitude, place.latLng!!.longitude), mMap.cameraPosition.zoom))
         whenNetworkAvailable()
+        remove_bus_route_details()
 
-        if(mLastKnownLocations.isNotEmpty()){
-            val user_loc = mLastKnownLocations.get(mLastKnownLocations.lastIndex)
-            val user_lat_lg = LatLng(user_loc.latitude,user_loc.longitude)
+        binding.title.text = "Searched Route"
+        binding.destinationTextview.text = "To: ${place.name}"
 
-            val lat_lng = place.latLng!!
-            var closest_routes:ArrayList<route> = ArrayList()
-            var closest_to_me_routes:ArrayList<String> = ArrayList()
-            for(route in routes){
-                val clos_dis = get_closest_distance_to_route(route,lat_lng)
-                val clos_to_me = get_closest_distance_to_route(route,user_lat_lg)
-                if(clos_dis<=constants.search_distance_threshold || clos_to_me<=constants.search_distance_threshold ){
-                    closest_routes.add(route)
-                    closest_to_me_routes.add(route.route_id)
-                }
+        if(custom_set_start_loc!=null){
+            binding.sourceTextview.text = "From your set location"
+            val user_loc = custom_set_start_loc
+            calculate_and_show_routes(user_loc!!, place)
+        }else{
+            if(mLastKnownLocations.isNotEmpty()){
+                binding.sourceTextview.text = "From your location"
+                val user_loc = mLastKnownLocations.get(mLastKnownLocations.lastIndex)
+                val user_lat_lg = LatLng(user_loc.latitude,user_loc.longitude)
+                calculate_and_show_routes(user_lat_lg,place)
             }
-            load_multiple_routes(closest_routes,lat_lng,user_lat_lg,closest_to_me_routes)
+            else{
+                binding.sourceTextview.text = ""
+                calculate_and_show_routes(place.latLng!!,place)
+            }
+        }
+//        binding.setDestinationLocation.visibility = View.VISIBLE
+        binding.setSourceLocation.visibility = View.VISIBLE
 
-            //        val rad = 300.0
-            val rad = constants.search_distance_threshold.toDouble()
-            var circleOptions = CircleOptions()
-            circleOptions.center(place.latLng!!)
-            circleOptions.radius(rad)
-            circleOptions.fillColor(Color.parseColor("#2271cce7"))
-            circleOptions.strokeWidth(0f)
-
-            search_place_circle.add(mMap.addCircle(circleOptions))
-
-            circleOptions = CircleOptions()
-            circleOptions.center(user_lat_lg)
-            circleOptions.radius(rad)
-            circleOptions.fillColor(Color.parseColor("#2271cce7"))
-            circleOptions.strokeWidth(0f)
-
-            search_place_circle.add(mMap.addCircle(circleOptions))
+        binding.setSourceLocation.setOnClickListener {
+            if(!is_picking_source_location) {
+                is_picking_source_location = true
+                binding.setStartLocTextview.text = getString(R.string.done)
+                binding.setStartLocImageview.setImageResource(R.drawable.check_icon)
+                when_back_pressed_from_setting_location = {
+                    is_picking_source_location = false
+                    binding.setStartLocTextview.text = getString(R.string.set)
+                    binding.setStartLocImageview.setImageResource(R.drawable.up_arrow)
+                    when_back_pressed_from_setting_location = {}
+                }
+                open_location_picker()
+            }else{
+                Constants().touch_vibrate(applicationContext)
+                custom_set_start_loc = mMap.getCameraPosition().target
+                onBackPressed()
+                remove_multiple_routes()
+                when_search_place_result_gotten(place)
+            }
         }
 
+    }
+
+    var when_back_pressed_from_setting_location: () -> Unit = {}
+
+    fun open_location_picker(){
+//        binding.finishCreateRoute.visibility = View.VISIBLE
+        binding.setLocationPin.visibility = View.VISIBLE
+        binding.searchPlace.visibility = View.GONE
+        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(mMap.cameraPosition.target, ZOOM_FOCUSED))
+        is_location_picker_open = true
+
+    }
+
+    fun close_location_picker(){
+//        binding.finishCreateRoute.visibility = View.GONE
+        binding.setLocationPin.visibility = View.GONE
+        binding.searchPlace.visibility = View.VISIBLE
+        when_back_pressed_from_setting_location()
+        is_location_picker_open = false
+
+    }
+
+    fun calculate_and_show_routes(start_loc: LatLng, place: Place){
+        val lat_lng = place.latLng!!
+        var closest_routes:ArrayList<route> = ArrayList()
+        var added_routes: ArrayList<String> = ArrayList()
+        var closest_to_me_routes:ArrayList<String> = ArrayList()
+        for(route in routes){
+            if(!route.disabled) {
+                val clos_dis = get_closest_distance_to_route(route, lat_lng)
+                val clos_to_me = get_closest_distance_to_route(route, start_loc)
+                if (clos_dis <= constants.search_distance_threshold || clos_to_me <= constants.search_distance_threshold) {
+                    closest_routes.add(route)
+                    closest_to_me_routes.add(route.route_id)
+                    added_routes.add(route.route_id)
+                }
+            }
+        }
+        var additional_routes:ArrayList<route> = ArrayList()
+//            for(route in routes){
+//                for(item in closest_routes){
+//                    if(closest_to_me_routes.contains(item.route_id) && !added_routes.contains(item.route_id)) {
+//                        val clos_dis_start = get_closest_distance_to_route(route, item.set_start_pos!!)
+//                        val clos_dis_end = get_closest_distance_to_route(route, item.set_end_pos!!)
+//
+//                        if (clos_dis_start <= constants.search_distance_threshold && clos_dis_end <= constants.search_distance_threshold) {
+//                            additional_routes.add(route)
+//                            added_routes.add(route.route_id)
+//                        }
+//                    }
+//                }
+//            }
+        if(additional_routes.isNotEmpty())closest_routes.addAll(additional_routes)
+        load_multiple_routes(closest_routes,lat_lng,start_loc, place)
+
+        //        val rad = 300.0
+        val rad = constants.search_distance_threshold.toDouble()
+        var circleOptions = CircleOptions()
+        circleOptions.center(place.latLng!!)
+        circleOptions.radius(rad)
+        circleOptions.fillColor(Color.parseColor("#2271cce7"))
+        circleOptions.strokeWidth(0f)
+
+        search_place_circle.add(mMap.addCircle(circleOptions))
+
+        circleOptions = CircleOptions()
+        circleOptions.center(start_loc)
+        circleOptions.radius(rad)
+        circleOptions.fillColor(Color.parseColor("#2271cce7"))
+        circleOptions.strokeWidth(0f)
+
+        search_place_circle.add(mMap.addCircle(circleOptions))
     }
 
     fun get_closest_distance_to_route(set_route :route, my_location:LatLng) : Long {
@@ -1140,9 +1243,74 @@ class MapsActivity : AppCompatActivity(),
     }
 
 
+    var selected_route: route? = null
+    val search_loaded_route_colors: HashMap<String,Int> = HashMap()
+    val search_loaded_routes: ArrayList<route> = ArrayList()
+    internal inner class newBusStopsListAdapter(val place: Place): RecyclerView.Adapter<ViewHolderRoutes>() {
+
+        override fun onCreateViewHolder(viewGroup: ViewGroup, viewType: Int): ViewHolderRoutes {
+            val vh = ViewHolderRoutes(LayoutInflater.from(baseContext).inflate(R.layout.recycler_item_direction_route, viewGroup, false))
+            return vh
+        }
+
+        override fun onBindViewHolder(v: ViewHolderRoutes, position: Int) {
+            val item = search_loaded_routes.get(position)
+            var item_color = search_loaded_route_colors.get(item.route_id)
+            if(selected_route!=null && !selected_route!!.route_id.equals(item.route_id)){
+                if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
+                    item_color = Color.LTGRAY
+                }else{
+                    item_color = Color.DKGRAY
+                }
+            }
+
+            var dis = 0
+            for(leg in item.route_directions_data!!.routes[0].legs){
+                dis+=leg.distance.value
+            }
+
+            if(dis>0.0){
+                val dis_km = (dis/1000).toBigDecimal().setScale(2, RoundingMode.HALF_EVEN).toDouble().toString()
+//                v.drivers_number_card.visibility = View.VISIBLE
+                v.drivers_number.text = "${dis_km} km"
+            }
+
+            v.route_card.setCardBackgroundColor(item_color!!)
+
+            v.loaded_route_relative.setOnClickListener {
+                if(selected_route==null){
+                    selected_route = item
+                    draw_specific_route(item,item_color)
+
+                    binding.searchedRoutesRecyclerview.adapter = newBusStopsListAdapter(place)
+                    binding.searchedRoutesRecyclerview.layoutManager = LinearLayoutManager(applicationContext,LinearLayoutManager.HORIZONTAL, false)
+                }else{
+                    selected_route = null
+                    when_search_place_result_gotten(place)
+                }
+            }
+        }
+
+        override fun getItemCount():Int {
+            return search_loaded_routes.size
+        }
+
+    }
+
+    internal inner class ViewHolderRoutes (view: View) : RecyclerView.ViewHolder(view) {
+        val route_card: CardView = view.findViewById(R.id.route_card)
+//        val drivers_number_card: CardView = view.findViewById(R.id.drivers_number_card)
+        val drivers_number: TextView = view.findViewById(R.id.drivers_number)
+        val loaded_route_relative: RelativeLayout = view.findViewById(R.id.loaded_route_relative)
+    }
+
+
+
     var is_showing_multiple_routes = false
     var open_bus_route = ""
-    fun load_multiple_routes(routes: ArrayList<route>, lat_lng: LatLng, my_lat_lng: LatLng, closest_to_me_routes:ArrayList<String> ){
+    fun load_multiple_routes(routes: ArrayList<route>, lat_lng: LatLng, my_lat_lng: LatLng, place: Place){
+        search_loaded_routes.clear()
+
         remove_bus_route()
         remove_drawn_route()
         add_marker(lat_lng, constants.end_loc, constants.end_loc)
@@ -1165,15 +1333,40 @@ class MapsActivity : AppCompatActivity(),
 //            if(closest_to_me_routes.contains(drivers_root.route_id)){
 //                cc = Color.argb(255, random.nextInt(256), random.nextInt(256), random.nextInt(256))
 //            }
-            draw_route(entire_path,cc)
-//            add_marker(drivers_root.set_start_pos!!, constants.start_loc, constants.start_loc)
-
-            for (item in drivers_root.added_bus_stops) {
-//                add_marker(item.stop_location, constants.stop_loc, item.creation_time.toString())
+            search_loaded_routes.add(drivers_root)
+            if(!search_loaded_route_colors.containsKey(drivers_root.route_id)){
+                search_loaded_route_colors.put(drivers_root.route_id, cc)
+            }else{
+                cc = search_loaded_route_colors.get(drivers_root.route_id)!!
             }
+            draw_route(entire_path,cc)
+            val rad = 10.0
+            var circleOptions = CircleOptions()
+            circleOptions.center(entire_path[0][0])
+            circleOptions.radius(rad)
+            circleOptions.fillColor(cc)
+            circleOptions.strokeWidth(0f)
+
+            search_place_circle.add(mMap.addCircle(circleOptions))
+            circleOptions = CircleOptions()
+            circleOptions.center(entire_path[entire_path.lastIndex][entire_path[entire_path.lastIndex].lastIndex])
+            circleOptions.radius(rad)
+            circleOptions.fillColor(cc)
+            circleOptions.strokeWidth(0f)
+            search_place_circle.add(mMap.addCircle(circleOptions))
+
+//            for (item in drivers_root.added_bus_stops) {
+//                add_marker(item.stop_location, constants.stop_loc, item.creation_time.toString())
+//            }
         }
-        Handler().postDelayed({ show_all_markers() }, 500)
+        Handler().postDelayed({
+            show_all_markers()
+        }, 500)
         is_showing_multiple_routes = true
+
+        binding.searchedRoutesRecyclerview.visibility = View.VISIBLE
+        binding.searchedRoutesRecyclerview.adapter = newBusStopsListAdapter(place)
+        binding.searchedRoutesRecyclerview.layoutManager = LinearLayoutManager(applicationContext,LinearLayoutManager.HORIZONTAL, false)
     }
 
     fun remove_multiple_routes(){
@@ -1192,6 +1385,30 @@ class MapsActivity : AppCompatActivity(),
             }
             search_place_circle.clear()
         }
+        binding.setDestinationLocation.visibility = View.GONE
+        binding.setSourceLocation.visibility = View.GONE
+        binding.searchedRoutesRecyclerview.visibility = View.GONE
+        remove_bus_route_details()
+    }
+
+    fun draw_specific_route(route_to_draw: route, color: Int){
+        remove_bus_route()
+        remove_drawn_route()
+
+        val entire_path: MutableList<List<LatLng>> = ArrayList()
+        if (route_to_draw.route_directions_data!!.routes.isNotEmpty()) {
+            val route = route_to_draw.route_directions_data!!.routes[0]
+            for (leg in route.legs) {
+                Log.e(TAG, "leg start adress: ${leg.start_address}")
+                for (step in leg.steps) {
+                    Log.e(TAG, "step maneuver: ${step.maneuver}")
+                    val pathh: List<LatLng> = PolyUtil.decode(step.polyline.points)
+                    entire_path.add(pathh)
+                }
+            }
+        }
+        draw_route(entire_path,color)
+        move_camera(entire_path[0][0])
     }
 
 }
