@@ -550,6 +550,13 @@ class MapsActivity : AppCompatActivity(),
                 if(viewed_driver.equals("")){
                     draw_bus_route(item.key)
                     set_bus_route_details(item.key)
+
+                    if(!mLastKnownLocations.isEmpty()){
+                        val l = mLastKnownLocations.get(mLastKnownLocations.lastIndex)
+                        record_view(item.key, LatLng(l.latitude,l.longitude))
+                    }else{
+                        record_view(item.key, LatLng(0.0,0.0))
+                    }
                 }else{
                     remove_bus_route(item.key)
                     remove_bus_route_details()
@@ -1573,5 +1580,37 @@ class MapsActivity : AppCompatActivity(),
         va.interpolator = LinearOutSlowInInterpolator()
         va.start()
         return va
+    }
+
+
+
+    fun record_view(driver: String, location: LatLng){
+        val uid = FirebaseAuth.getInstance().currentUser!!.uid
+        val route = get_drivers_route(driver)!!
+        val user = constants.SharedPreferenceManager(applicationContext).getPersonalInfo()!!
+
+        val ref = db.collection(constants.organisations)
+            .document(user.phone.country_name)
+            .collection(constants.country_routes)
+            .document(route.route_id)
+            .collection(constants.views)
+            .document()
+
+        val doc = hashMapOf(
+            "creation_time" to Calendar.getInstance().timeInMillis,
+            "driver_id" to driver,
+            "route" to route.route_id,
+            "view_id" to ref.id,
+            "viewer_id" to uid,
+            "viewer_lat_lng" to Gson().toJson(location)
+        )
+
+        ref.set(doc).addOnSuccessListener {
+            whenNetworkAvailable()
+            Log.e(TAG,"Recorded view!")
+        }.addOnFailureListener {
+            whenNetworkLost()
+        }
+
     }
 }

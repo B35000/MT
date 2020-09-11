@@ -45,6 +45,7 @@ class Constants {
     val search_distance_threshold = 900
     val intent_source = "from"
     val splashActivity = "SplashActivity"
+    val views = "views"
 
     fun touch_vibrate(context: Context?){
         val vibrator = context?.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
