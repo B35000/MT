@@ -135,6 +135,10 @@ class MapsActivity : AppCompatActivity(),
         }
 
         set_network_change_receiver()
+
+        if(!intent.hasExtra(constants.intent_source)){
+            Constants().maintain_theme(applicationContext)
+        }
     }
 
     fun set_network_change_receiver(){
@@ -453,7 +457,7 @@ class MapsActivity : AppCompatActivity(),
 
 
     //map part
-
+    var auto_adjust_to_my_loc = false
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
         if(Constants().SharedPreferenceManager(applicationContext).isDarkModeOn()) {
@@ -474,6 +478,9 @@ class MapsActivity : AppCompatActivity(),
 
 
         binding.findMeCardview.setOnClickListener {
+            auto_adjust_to_my_loc = false
+            binding.locateIcon.setImageResource(R.drawable.locate_icon)
+
             move_cam_to_my_location()
         }
 
@@ -489,6 +496,19 @@ class MapsActivity : AppCompatActivity(),
             remove_multiple_routes()
         }
 
+        binding.findMeCardview.setOnLongClickListener {
+            if(!auto_adjust_to_my_loc){
+                Toast.makeText(applicationContext,"Auto-location on",Toast.LENGTH_SHORT).show()
+                auto_adjust_to_my_loc = true
+                binding.locateIcon.setImageResource(R.drawable.locate_icon_green)
+            }else{
+                Toast.makeText(applicationContext,"Auto-location off",Toast.LENGTH_SHORT).show()
+                auto_adjust_to_my_loc = false
+                binding.locateIcon.setImageResource(R.drawable.locate_icon)
+            }
+
+            true
+        }
 
     }
 
@@ -531,7 +551,7 @@ class MapsActivity : AppCompatActivity(),
                     draw_bus_route(item.key)
                     set_bus_route_details(item.key)
                 }else{
-                    remove_bus_route()
+                    remove_bus_route(item.key)
                     remove_bus_route_details()
                 }
             }
@@ -608,6 +628,11 @@ class MapsActivity : AppCompatActivity(),
         val last_loc = mLastKnownLocations.get(mLastKnownLocations.lastIndex)
         val ll = LatLng(last_loc.latitude,last_loc.longitude)
         load_my_location_on_map()
+        if(auto_adjust_to_my_loc) {
+            Log.e("when_location_gotten","adjusting to my location")
+            move_cam_to_my_location()
+        }
+
     }
 
     private fun load_my_location_on_map() {
@@ -646,7 +671,7 @@ class MapsActivity : AppCompatActivity(),
         if(mLastKnownLocations.isNotEmpty()) {
             val last_loc = mLastKnownLocations.get(mLastKnownLocations.lastIndex)
             val ll = LatLng(last_loc.latitude, last_loc.longitude)
-            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(ll.latitude, ll.longitude), ZOOM))
+            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(ll.latitude, ll.longitude), mMap.cameraPosition.zoom))
         }else{
             set_up_getting_my_location()
         }
@@ -741,30 +766,27 @@ class MapsActivity : AppCompatActivity(),
 
     private var doubleBackToExitPressedOnce = false
     override fun onBackPressed() {
-        if(is_location_picker_open){
-            close_location_picker()
-        } else if(is_showing_multiple_routes){
-            remove_multiple_routes()
-            binding.findMeCardview.performClick()
+        if (supportFragmentManager.fragments.size > 1) {
+            val trans = supportFragmentManager.beginTransaction()
+            trans.setCustomAnimations(R.anim.slide_in_left, R.anim.slide_out_right)
+            val currentFragPos = supportFragmentManager.fragments.size - 1
+
+            trans.remove(supportFragmentManager.fragments.get(currentFragPos))
+            trans.commit()
+            supportFragmentManager.popBackStack()
         } else {
-            if (supportFragmentManager.fragments.size > 1) {
-                val trans = supportFragmentManager.beginTransaction()
-                trans.setCustomAnimations(R.anim.slide_in_left, R.anim.slide_out_right)
-                val currentFragPos = supportFragmentManager.fragments.size - 1
-
-                trans.remove(supportFragmentManager.fragments.get(currentFragPos))
-                trans.commit()
-                supportFragmentManager.popBackStack()
-
+            if(is_location_picker_open){
+                close_location_picker()
+            } else if(is_showing_multiple_routes){
+                remove_multiple_routes()
+                binding.findMeCardview.performClick()
             } else {
                 if (doubleBackToExitPressedOnce) {
                     super.onBackPressed()
                     return
                 }
-
                 this.doubleBackToExitPressedOnce = true
                 Toast.makeText(this, "Press BACK again to exit", Toast.LENGTH_SHORT).show()
-
                 Handler().postDelayed(Runnable { doubleBackToExitPressedOnce = false }, 2000)
             }
         }
@@ -823,6 +845,8 @@ class MapsActivity : AppCompatActivity(),
             }
             driver_map_marker_trail.get(driver)!!.add(circle)
         }
+        addPulsatingEffect(drivers_last_locations[drivers_last_locations.lastIndex].loc)
+        if(viewed_driver.equals(driver))move_camera(drivers_last_locations[drivers_last_locations.lastIndex].loc)
     }
 
     fun set_all_drivers(){
@@ -894,7 +918,7 @@ class MapsActivity : AppCompatActivity(),
 
 
     fun draw_bus_route(driver: String){
-        remove_bus_route()
+        remove_bus_route(viewed_driver)
         val drivers_root = get_drivers_route(driver)
         if(drivers_root!=null) {
             val entire_path: MutableList<List<LatLng>> = ArrayList()
@@ -909,28 +933,32 @@ class MapsActivity : AppCompatActivity(),
                     }
                 }
             }
-            remove_drawn_route()
+            if(!viewed_driver.equals(""))remove_drawn_route(get_drivers_route(viewed_driver)!!.route_id)
             var c = Color.BLACK
             if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
                 c = Color.WHITE
             }
-            draw_route(entire_path, c)
+            draw_route(entire_path, c,drivers_root.route_id)
             add_marker(drivers_root.set_start_pos!!, constants.start_loc, constants.start_loc)
             add_marker(drivers_root.set_end_pos!!, constants.end_loc, constants.end_loc)
             for (item in drivers_root.added_bus_stops) {
                 add_marker(item.stop_location, constants.stop_loc, item.creation_time.toString())
             }
             viewed_driver = driver
-            Handler().postDelayed({ show_all_markers() }, 500)
+//            Handler().postDelayed({ show_all_markers() }, 500)
         }
     }
 
-    fun remove_bus_route(){
+    fun remove_bus_route(driver: String){
         for(item in added_markers.values){
             item.remove()
         }
         added_markers.clear()
-        remove_drawn_route()
+        if(!driver.equals("")){
+//            Toast.makeText(applicationContext, "removing ${get_drivers_route(driver)!!.route_id}",Toast.LENGTH_SHORT).show()
+            remove_drawn_route(get_drivers_route(driver)!!.route_id)
+//            remove_all_drawn_route()
+        }
         viewed_driver = ""
     }
 
@@ -967,34 +995,65 @@ class MapsActivity : AppCompatActivity(),
         added_markers.put(name, new_marker)
     }
 
-    var drawn_polyline: ArrayList<Polyline> = ArrayList()
-    fun draw_route(entire_paths: MutableList<List<LatLng>>, color: Int){
+    var drawn_polyline: HashMap<String,ArrayList<Polyline>> = HashMap()
+    fun draw_route(entire_paths: MutableList<List<LatLng>>, color: Int, route_id: String){
         for (i in 0 until entire_paths.size) {
             if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
                 val op = PolylineOptions()
                     .addAll(entire_paths[i])
                     .width(5f)
                     .color(color)
-                drawn_polyline.add(mMap.addPolyline(op))
+                if(drawn_polyline.containsKey(route_id)){
+                    drawn_polyline.get(route_id)!!.add(mMap.addPolyline(op))
+                }else{
+                    val p = ArrayList<Polyline>()
+                    p.add(mMap.addPolyline(op))
+                    drawn_polyline.put(route_id,p)
+                }
+//                drawn_polyline.put(route_id, mMap.addPolyline(op))
             }else{
                 val op = PolylineOptions()
                     .addAll(entire_paths[i])
                     .width(5f)
                     .color(color)
-                drawn_polyline.add(mMap.addPolyline(op))
+                if(drawn_polyline.containsKey(route_id)){
+                    drawn_polyline.get(route_id)!!.add(mMap.addPolyline(op))
+                }else{
+                    val p = ArrayList<Polyline>()
+                    p.add(mMap.addPolyline(op))
+                    drawn_polyline.put(route_id,p)
+                }
+//                drawn_polyline.put(route_id, mMap.addPolyline(op))
             }
 
         }
 
     }
 
-    fun remove_drawn_route(){
-        if(drawn_polyline.isNotEmpty()){
-            for(item in drawn_polyline){
+    fun remove_drawn_route(route_id: String){
+        if(drawn_polyline.isNotEmpty() && !route_id.equals("")){
+            if(drawn_polyline.containsKey(route_id)){
+                for(line in drawn_polyline.get(route_id)!!){
+                    line.remove()
+                }
+                drawn_polyline.remove(route_id)
+            }
+            for(item in search_place_circle){
                 item.remove()
             }
-            drawn_polyline.clear()
+            search_place_circle.clear()
         }
+    }
+
+    fun remove_all_drawn_route(){
+        for(poly in drawn_polyline.keys){
+            val all_lines = drawn_polyline.get(poly)!!
+            for(line in all_lines){
+                line.remove()
+            }
+        }
+
+        drawn_polyline.clear()
         for(item in search_place_circle){
             item.remove()
         }
@@ -1002,12 +1061,14 @@ class MapsActivity : AppCompatActivity(),
     }
 
     fun get_drivers_route(driver_id: String): route?{
-        val last_route = get_drivers_last_few_locations(positions.get(driver_id)!!)
-        val route = last_route.get(last_route.lastIndex)
+        if(!driver_id.equals("")) {
+            val last_route = get_drivers_last_few_locations(positions.get(driver_id)!!)
+            val route = last_route.get(last_route.lastIndex)
 
-        for(item in routes){
-            if(route.route_id.equals(item.route_id)){
-                return item
+            for (item in routes) {
+                if (route.route_id.equals(item.route_id)) {
+                    return item
+                }
             }
         }
 
@@ -1077,7 +1138,7 @@ class MapsActivity : AppCompatActivity(),
     var search_place_circle: ArrayList<Circle> = ArrayList()
     var custom_set_start_loc: LatLng? = null
     var is_picking_source_location = false
-    var is_location_picker_open = true
+    var is_location_picker_open = false
     fun when_search_place_result_gotten(place: Place){
 //        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(place.latLng!!.latitude, place.latLng!!.longitude), mMap.cameraPosition.zoom))
         whenNetworkAvailable()
@@ -1125,6 +1186,8 @@ class MapsActivity : AppCompatActivity(),
                 when_search_place_result_gotten(place)
             }
         }
+
+
 
     }
 
@@ -1243,6 +1306,7 @@ class MapsActivity : AppCompatActivity(),
     }
 
 
+
     var selected_route: route? = null
     val search_loaded_route_colors: HashMap<String,Int> = HashMap()
     val search_loaded_routes: ArrayList<route> = ArrayList()
@@ -1314,8 +1378,8 @@ class MapsActivity : AppCompatActivity(),
     fun load_multiple_routes(routes: ArrayList<route>, lat_lng: LatLng, my_lat_lng: LatLng, place: Place){
         search_loaded_routes.clear()
 
-        remove_bus_route()
-        remove_drawn_route()
+        remove_bus_route(viewed_driver)
+        remove_all_drawn_route()
         add_marker(lat_lng, constants.end_loc, constants.end_loc)
         add_marker(my_lat_lng, constants.start_loc, constants.start_loc)
         for(drivers_root in routes){
@@ -1346,7 +1410,7 @@ class MapsActivity : AppCompatActivity(),
             }else{
                 cc = search_loaded_route_colors.get(drivers_root.route_id)!!
             }
-            draw_route(entire_path,cc)
+            draw_route(entire_path,cc,drivers_root.route_id)
             val rad = 10.0
             var circleOptions = CircleOptions()
             circleOptions.center(entire_path[0][0])
@@ -1385,7 +1449,7 @@ class MapsActivity : AppCompatActivity(),
                 item.remove()
             }
             added_markers.clear()
-            remove_drawn_route()
+            remove_drawn_route(get_drivers_route(viewed_driver)!!.route_id)
 
 //            if(open_bus_route.equals(""))draw_bus_route(open_bus_route)
             for(item in search_place_circle){
@@ -1400,8 +1464,8 @@ class MapsActivity : AppCompatActivity(),
     }
 
     fun draw_specific_route(route_to_draw: route, color: Int){
-        remove_bus_route()
-        remove_drawn_route()
+        remove_bus_route(viewed_driver)
+        remove_drawn_route(get_drivers_route(viewed_driver)!!.route_id)
 
         val entire_path: MutableList<List<LatLng>> = ArrayList()
         if (route_to_draw.route_directions_data!!.routes.isNotEmpty()) {
@@ -1415,8 +1479,92 @@ class MapsActivity : AppCompatActivity(),
                 }
             }
         }
-        draw_route(entire_path,color)
-        move_camera(entire_path[0][0])
+        draw_route(entire_path,color,route_to_draw.route_id)
+//        move_camera(entire_path[0][0])
+
+        for (item in route_to_draw.added_bus_stops) {
+            add_marker(item.stop_location, constants.stop_loc, item.creation_time.toString())
+        }
     }
 
+
+
+
+    protected fun getDisplayPulseRadius(radius: Float): Float {
+        val diff: Float = mMap.getMaxZoomLevel() - mMap.getCameraPosition().zoom
+        if (diff < 3) return radius
+        if (diff < 3.7) return radius * (diff / 2)
+        if (diff < 4.5) return radius * diff
+        if (diff < 5.5) return radius * diff * 1.5f
+        if (diff < 7) return radius * diff * 2f
+        if (diff < 7.8) return radius * diff * 3.5f
+        if (diff < 8.5) return (radius * diff) * 5
+        if (diff < 10) return radius * diff * 10f
+        if (diff < 12) return radius * diff * 18f
+        if (diff < 13) return radius * diff * 28f
+        if (diff < 16) return radius * diff * 40f
+        return if (diff < 18) radius * diff * 60 else radius * diff * 80
+    }
+
+    private var lastUserCircle: Circle? = null
+    private val pulseDuration: Long = 2500
+    private var lastPulseAnimator: ValueAnimator? = null
+    var rad = 200f
+    private fun addPulsatingEffect(userLatlng: LatLng) {
+        if (lastPulseAnimator != null) {
+            lastPulseAnimator!!.cancel()
+            Log.d("onLocationUpdated: ", "cancelled")
+        }
+        if (lastUserCircle != null) lastUserCircle!!.center = userLatlng
+        lastPulseAnimator = valueAnimate(ValueAnimator.AnimatorUpdateListener { animation ->
+            if (lastUserCircle != null) {
+                Log.e(
+                    "addPulsatingEffect",
+                    "animation value is ${(animation.getAnimatedValue() as Float)}"
+                )
+                lastUserCircle!!.setRadius((animation.getAnimatedValue() as Float).toDouble())
+                var col = Color.parseColor("#2271cce7")
+                if (constants.SharedPreferenceManager(applicationContext).isDarkModeOn()) {
+                    col = Color.GRAY
+                }
+                lastUserCircle!!.fillColor =
+                    adjustAlpha(col, (rad - (animation.getAnimatedValue() as Float)) / rad)
+            } else {
+                Log.e(
+                    "addPulsatingEffect",
+                    "animation value is ${(animation.getAnimatedValue() as Float)}"
+                )
+                var col = Color.parseColor("#2271cce7")
+                if (constants.SharedPreferenceManager(applicationContext).isDarkModeOn()) {
+                    col = Color.GRAY
+                }
+                lastUserCircle = mMap.addCircle(
+                    CircleOptions()
+                        .center(userLatlng)
+                        .radius((animation.getAnimatedValue() as Float).toDouble())
+                        .fillColor(col)
+                        .strokeWidth(0f)
+                )
+            }
+        })
+    }
+
+    fun adjustAlpha(color: Int, factor: Float): Int {
+        val alpha = Math.round(Color.alpha(color) * factor)
+//        Log.e("adjustAlpha","adjusted alpha is ${alpha}")
+        val red = Color.red(color)
+        val green = Color.green(color)
+        val blue = Color.blue(color)
+        return Color.argb(alpha, red, green, blue)
+    }
+
+    protected fun valueAnimate( updateListener: ValueAnimator.AnimatorUpdateListener?): ValueAnimator? {
+//        Log.d("valueAnimate: ", "called")
+        val va = ValueAnimator.ofFloat(0f, rad)
+        va.duration = pulseDuration
+        va.addUpdateListener(updateListener)
+        va.interpolator = LinearOutSlowInInterpolator()
+        va.start()
+        return va
+    }
 }

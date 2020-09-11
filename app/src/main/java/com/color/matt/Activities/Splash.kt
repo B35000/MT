@@ -79,6 +79,7 @@ class Splash : AppCompatActivity() {
                 load_organisations()
             }else {
                 val intent = Intent(this, MapsActivity::class.java)
+                intent.putExtra(constants.intent_source, constants.splashActivity)
                 startActivity(intent)
                 overridePendingTransition(0, 0)
                 finish()

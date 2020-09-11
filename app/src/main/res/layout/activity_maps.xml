@@ -87,6 +87,7 @@
                         android:layout_height="wrap_content">
 
                         <ImageView
+                            android:id="@+id/locate_icon"
                             android:layout_width="35dp"
                             android:scaleY="0.8"
                             android:scaleX="0.8"
