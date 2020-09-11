@@ -553,6 +553,10 @@ class MapsActivity : AppCompatActivity(),
                 }else{
                     remove_bus_route(item.key)
                     remove_bus_route_details()
+
+                    if(last_searched_place!=null){
+                        when_search_place_result_gotten(last_searched_place!!)
+                    }
                 }
             }
         }
@@ -1139,8 +1143,10 @@ class MapsActivity : AppCompatActivity(),
     var custom_set_start_loc: LatLng? = null
     var is_picking_source_location = false
     var is_location_picker_open = false
+    var last_searched_place: Place? = null
     fun when_search_place_result_gotten(place: Place){
 //        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(place.latLng!!.latitude, place.latLng!!.longitude), mMap.cameraPosition.zoom))
+        last_searched_place = place
         whenNetworkAvailable()
         remove_bus_route_details()
 
@@ -1181,7 +1187,7 @@ class MapsActivity : AppCompatActivity(),
             }else{
                 Constants().touch_vibrate(applicationContext)
                 custom_set_start_loc = mMap.getCameraPosition().target
-                onBackPressed()
+                close_location_picker()
                 remove_multiple_routes()
                 when_search_place_result_gotten(place)
             }
@@ -1449,7 +1455,7 @@ class MapsActivity : AppCompatActivity(),
                 item.remove()
             }
             added_markers.clear()
-            remove_drawn_route(get_drivers_route(viewed_driver)!!.route_id)
+            remove_all_drawn_route()
 
 //            if(open_bus_route.equals(""))draw_bus_route(open_bus_route)
             for(item in search_place_circle){
@@ -1461,6 +1467,7 @@ class MapsActivity : AppCompatActivity(),
         binding.setSourceLocation.visibility = View.GONE
         binding.searchedRoutesRecyclerview.visibility = View.GONE
         remove_bus_route_details()
+        last_searched_place = null
     }
 
     fun draw_specific_route(route_to_draw: route, color: Int){
