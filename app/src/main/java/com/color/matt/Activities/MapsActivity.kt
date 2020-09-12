@@ -20,6 +20,7 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
 import android.widget.ImageView
 import android.widget.RelativeLayout
 import android.widget.TextView
@@ -519,7 +520,11 @@ class MapsActivity : AppCompatActivity(),
                 val place: Place = Autocomplete.getPlaceFromIntent(data!!)
                 Log.e("MapActivity", "Place: " + place.name+" and latlng: "+place.latLng!!.latitude)
                 custom_set_start_loc = null
-                when_search_place_result_gotten(place)
+                hideKeyboard()
+                Handler().postDelayed({
+                    when_search_place_result_gotten(place)
+                }, 300)
+
                 whenNetworkAvailable()
             }
             else if (resultCode == AutocompleteActivity.RESULT_ERROR) {
@@ -788,10 +793,12 @@ class MapsActivity : AppCompatActivity(),
         } else {
             if(is_location_picker_open){
                 close_location_picker()
-            } else if(is_showing_multiple_routes){
+            }
+            else if(is_showing_multiple_routes){
                 remove_multiple_routes()
                 binding.findMeCardview.performClick()
-            } else {
+            }
+            else {
                 if (doubleBackToExitPressedOnce) {
                     super.onBackPressed()
                     return
@@ -1086,11 +1093,11 @@ class MapsActivity : AppCompatActivity(),
         return null
     }
 
-    fun show_all_markers(){
-        if(added_markers.values.isNotEmpty()) {
+    fun show_all_markers(added_markers: ArrayList<LatLng>){
+        if(added_markers.isNotEmpty()) {
             val builder: LatLngBounds.Builder = LatLngBounds.Builder()
-            for (marker in added_markers.values) {
-                builder.include(marker.position)
+            for (marker in added_markers) {
+                builder.include(marker)
             }
             val bounds = builder.build()
             val padding = dpToPx(120)
@@ -1210,13 +1217,14 @@ class MapsActivity : AppCompatActivity(),
 //        binding.finishCreateRoute.visibility = View.VISIBLE
         binding.setLocationPin.visibility = View.VISIBLE
         binding.searchPlace.visibility = View.GONE
-//        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(mMap.cameraPosition.target, ZOOM_FOCUSED))
+        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(mMap.cameraPosition.target, mMap.cameraPosition.zoom+1f))
         is_location_picker_open = true
 
     }
 
     fun close_location_picker(){
 //        binding.finishCreateRoute.visibility = View.GONE
+        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(mMap.cameraPosition.target, mMap.cameraPosition.zoom-1f))
         binding.setLocationPin.visibility = View.GONE
         binding.searchPlace.visibility = View.VISIBLE
         when_back_pressed_from_setting_location()
@@ -1444,7 +1452,10 @@ class MapsActivity : AppCompatActivity(),
 //            }
         }
         Handler().postDelayed({
-            show_all_markers()
+            val array = ArrayList<LatLng>()
+            array.add(lat_lng)
+            array.add(my_lat_lng)
+            show_all_markers(array)
         }, 500)
         is_showing_multiple_routes = true
 
@@ -1478,8 +1489,8 @@ class MapsActivity : AppCompatActivity(),
     }
 
     fun draw_specific_route(route_to_draw: route, color: Int){
-        remove_bus_route(viewed_driver)
-        remove_drawn_route(get_drivers_route(viewed_driver)!!.route_id)
+//        remove_bus_route(viewed_driver)
+        remove_all_drawn_route()
 
         val entire_path: MutableList<List<LatLng>> = ArrayList()
         if (route_to_draw.route_directions_data!!.routes.isNotEmpty()) {
@@ -1612,5 +1623,14 @@ class MapsActivity : AppCompatActivity(),
             whenNetworkLost()
         }
 
+    }
+
+    fun Activity.hideKeyboard() {
+        hideKeyboard(currentFocus ?: View(this))
+    }
+
+    fun Context.hideKeyboard(view: View) {
+        val inputMethodManager = getSystemService(Activity.INPUT_METHOD_SERVICE) as InputMethodManager
+        inputMethodManager.hideSoftInputFromWindow(view.windowToken, 0)
     }
 }
