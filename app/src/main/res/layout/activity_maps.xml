@@ -27,7 +27,7 @@
                     android:id="@+id/map"
                     android:name="com.google.android.gms.maps.SupportMapFragment"
                     android:layout_width="match_parent"
-                    android:layout_marginTop="130dp"
+                    android:layout_marginTop="150dp"
                     android:layout_height="match_parent"/>
 
                 <ImageView
@@ -44,7 +44,7 @@
                     android:layout_width="wrap_content"
                     android:layout_alignParentEnd="true"
                     android:layout_alignParentBottom="true"
-                    android:visibility="visible"
+                    android:visibility="gone"
                     android:layout_marginBottom="170dp"
                     android:layout_marginEnd="10dp"
                     app:cardBackgroundColor="@color/card_back"
@@ -104,7 +104,7 @@
                     android:visibility="gone"
                     android:layout_alignParentEnd="true"
                     android:layout_alignParentBottom="true"
-                    android:layout_marginBottom="230dp"
+                    android:layout_marginBottom="170dp"
                     android:layout_marginEnd="10dp"
                     app:cardBackgroundColor="@color/card_back"
                     app:cardCornerRadius="23dp"
@@ -132,13 +132,13 @@
             <RelativeLayout
                 android:id="@+id/bottom_sheet_layout"
                 android:layout_width="match_parent"
-                android:layout_height="130dp">
+                android:layout_height="150dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:orientation="horizontal"
                     android:layout_marginHorizontal="15dp"
-                    android:layout_marginTop="20dp"
+                    android:layout_marginTop="15dp"
                     android:layout_height="wrap_content">
 
                     <ImageView
@@ -211,14 +211,14 @@
                                     android:layout_marginEnd="50dp"
                                     android:textSize="13sp"
                                     android:layout_marginTop="3dp"
-                                    android:layout_height="wrap_content"
+                                    android:layout_height="20dp"
                                     android:text="To see the route its going." />
 
                                 <RelativeLayout
                                     android:id="@+id/set_source_location"
                                     android:layout_width="wrap_content"
-                                    android:layout_marginTop="1dp"
                                     android:visibility="gone"
+                                    android:layout_marginVertical="5dp"
                                     android:layout_centerVertical="true"
                                     android:layout_alignParentEnd="true"
                                     android:layout_height="wrap_content">
@@ -236,7 +236,7 @@
                                             android:layout_gravity="center_vertical"
                                             android:textColor="@color/colorPrimary"
                                             android:layout_height="wrap_content"
-                                            android:text="@string/set" />
+                                            android:text="@string/search" />
 
 
                                         <ImageView
@@ -245,7 +245,7 @@
                                             android:layout_gravity="center_vertical"
                                             android:layout_marginStart="5dp"
                                             android:translationY="1dp"
-                                            android:src="@drawable/up_arrow"
+                                            android:src="@drawable/search_location"
                                             android:layout_height="15dp"/>
 
                                     </LinearLayout>
@@ -264,13 +264,13 @@
                                     android:textSize="13sp"
                                     android:layout_marginTop="3dp"
                                     android:layout_marginEnd="50dp"
-                                    android:layout_height="wrap_content"
+                                    android:layout_height="20dp"
                                     android:text="" />
 
                                 <RelativeLayout
                                     android:id="@+id/set_destination_location"
                                     android:layout_width="wrap_content"
-                                    android:layout_marginTop="1dp"
+                                    android:layout_marginVertical="5dp"
                                     android:visibility="gone"
                                     android:layout_centerVertical="true"
                                     android:layout_alignParentEnd="true"
@@ -288,7 +288,7 @@
                                             android:layout_gravity="center_vertical"
                                             android:textColor="@color/colorPrimary"
                                             android:layout_height="wrap_content"
-                                            android:text="Set" />
+                                            android:text="@string/search" />
 
 
                                         <ImageView
@@ -296,7 +296,7 @@
                                             android:layout_gravity="center_vertical"
                                             android:layout_marginStart="5dp"
                                             android:translationY="1dp"
-                                            android:src="@drawable/up_arrow"
+                                            android:src="@drawable/search_location"
                                             android:layout_height="15dp"/>
 
                                     </LinearLayout>
@@ -307,15 +307,47 @@
 
                             <androidx.recyclerview.widget.RecyclerView
                                 android:id="@+id/searched_routes_recyclerview"
-                                android:layout_marginTop="10dp"
+                                android:layout_marginTop="15dp"
+                                android:visibility="gone"
                                 android:layout_width="match_parent"
                                 android:layout_height="40dp"/>
 
                         </LinearLayout>
 
+                        <RelativeLayout
+                            android:id="@+id/search_button_layout"
+                            android:layout_alignParentBottom="true"
+                            android:layout_width="match_parent"
+                            android:layout_marginStart="10dp"
+                            android:layout_height="wrap_content">
+
+                            <Button
+                                android:id="@+id/search_button"
+                                android:layout_width="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:layout_marginEnd="35dp"
+                                android:textSize="13sp"
+                                android:paddingBottom="5dp"
+                                android:background="@null"
+                                android:text="Search Destination"
+                                android:layout_height="40dp"/>
+
+                            <ImageView
+                                android:layout_width="35dp"
+                                android:scaleY="0.4"
+                                android:layout_alignParentEnd="true"
+                                android:layout_centerVertical="true"
+                                android:scaleX="0.4"
+                                android:src="@drawable/search_location"
+                                android:layout_height="35dp"/>
+
+                        </RelativeLayout>
+
                     </RelativeLayout>
 
                 </LinearLayout>
+
+
 
             </RelativeLayout>
 
