@@ -36,7 +36,7 @@ class Constants {
     val country_routes = "country_routes"
     val distance_threshold = 69
     val driver_locations = "driver_locations"
-    val update_interval: Long = (4*1000)
+    val update_interval: Long = (7*1000)
     val coll_meta_data = "coll_meta_data"
     val doc_phone = "doc_phone"
     val pass = "gHH5SGcFemdzqHmNCbjy3AHWiun1"

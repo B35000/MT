@@ -332,6 +332,7 @@ class MapsActivity : AppCompatActivity(),
     var org_pos = 0
     fun load_all_drivers_first(){
         org_pos = 0
+        showLoadingScreen()
         for(org in organisations) {
             db.collection(constants.organisations)
                 .document(org.country!!)
@@ -359,6 +360,7 @@ class MapsActivity : AppCompatActivity(),
                     if(org_pos>=organisations.size){
                         //were done
                         set_up_driver_listeners(true)
+                        hideLoadingScreen()
 //                        if(positions.isNotEmpty())set_all_drivers()
                     }
                 }
@@ -379,12 +381,14 @@ class MapsActivity : AppCompatActivity(),
 
     fun set_driver_listener_updates(){
         remove_driver_liseners()
+        val t = Calendar.getInstance().timeInMillis
         for(org in organisations){
             val org_listener = db.collection(constants.organisations)
                 .document(org.country!!)
                 .collection(constants.country_organisations)
                 .document(org.org_id!!)
                 .collection(constants.driver_locations)
+                .whereGreaterThanOrEqualTo("creation_time", t)
                 .addSnapshotListener { snapshots, e ->
                     if (e != null) {
                         Log.w(TAG, "listen:error", e)
@@ -394,9 +398,11 @@ class MapsActivity : AppCompatActivity(),
                     for (dc in snapshots!!.documentChanges) {
                         if(dc.type.equals(DocumentChange.Type.ADDED)){
 //                            Log.d(TAG, "New location: ${dc.document.data}")
-                        }else if(dc.type.equals(DocumentChange.Type.MODIFIED)){
+                        }
+                        else if(dc.type.equals(DocumentChange.Type.MODIFIED)){
 //                            Log.d(TAG, "Modified location: ${dc.document.data}")
-                        }else if(dc.type.equals(DocumentChange.Type.REMOVED)){
+                        }
+                        else if(dc.type.equals(DocumentChange.Type.REMOVED)){
 //                            Log.d(TAG, "Removed location: ${dc.document.data}")
                         }
 
@@ -408,9 +414,11 @@ class MapsActivity : AppCompatActivity(),
                         val route = dc.document["route"] as String
 
                         val driverPos = driver_pos(pos_id,creation_time,user,loc,organisation,route)
+                        Log.e(TAG, "checking if location item is already there")
                         if(!is_location_contained(driverPos) && Calendar.getInstance().timeInMillis-creation_time <= constants.update_limit){
                             put_position_item(driverPos)
                             added_postitions.add(driverPos.pos_id)
+                            Log.e(TAG, "its not! adding")
                             when_driver_position_updated(driverPos)
                         }
                     }
@@ -543,18 +551,18 @@ class MapsActivity : AppCompatActivity(),
                     optimum_paths.clear()
                     Handler().postDelayed({
                         if(last_searched_place!=null)when_search_place_result_gotten(last_searched_place!!)
-                    }, 200)
+                    }, 50)
                 }else if(set_custom_point.equals("ending")){
                     optimum_paths.clear()
                     Handler().postDelayed({
                         when_search_place_result_gotten(place)
-                    }, 200)
+                    }, 50)
                 }else{
                     custom_set_start_loc = null
                     Handler().postDelayed({
                         optimum_paths.clear()
                         when_search_place_result_gotten(place)
-                    }, 200)
+                    }, 50)
                 }
 
                 whenNetworkAvailable()
@@ -699,9 +707,10 @@ class MapsActivity : AppCompatActivity(),
         }
 
         if(my_marker!=null){
-            my_marker!!.remove()
+            my_marker!!.position = LatLng(last_loc.latitude, last_loc.longitude)
+        }else{
+            my_marker = mMap.addMarker(op)
         }
-        my_marker = mMap.addMarker(op)
 
         my_marker_trailing_circle?.remove()
 
@@ -849,53 +858,58 @@ class MapsActivity : AppCompatActivity(),
     val driver_map_marker_trail: HashMap<String, ArrayList<Circle>> = HashMap()
     fun set_drivers_on_map(driver: String){
         val drivers_last_locations = get_drivers_last_few_locations(positions.get(driver)!!)
-
-        val op = MarkerOptions().position(drivers_last_locations[drivers_last_locations.lastIndex].loc)
-        val final_icon: BitmapDrawable?  = getDrawable(R.drawable.bus_loc) as BitmapDrawable
-
-        val height = 108
-        val width = 55
-        if(final_icon!=null) {
-            val b: Bitmap = final_icon.bitmap
-            val smallMarker: Bitmap = Bitmap.createScaledBitmap(b, width, height, false)
-            op.icon(BitmapDescriptorFactory.fromBitmap(smallMarker))
-        }
+        val drivers_last_location = drivers_last_locations[drivers_last_locations.lastIndex].loc
 
         if(driver_map_markers.containsKey(driver)){
-            driver_map_markers.get(driver)!!.remove()
-            driver_map_markers.remove(driver)
+            driver_map_markers.get(driver)!!.position = drivers_last_location
+//            driver_map_markers.remove(driver)
+        }else{
+            val op = MarkerOptions().position(drivers_last_location)
+            val final_icon: BitmapDrawable?  = getDrawable(R.drawable.bus_loc) as BitmapDrawable
+
+            val height = 108
+            val width = 55
+            if(final_icon!=null) {
+                val b: Bitmap = final_icon.bitmap
+                val smallMarker: Bitmap = Bitmap.createScaledBitmap(b, width, height, false)
+                op.icon(BitmapDescriptorFactory.fromBitmap(smallMarker))
+            }
+
+            val driver_marker = mMap.addMarker(op)
+            driver_marker.tag = driver
+            driver_map_markers.put(driver,driver_marker)
         }
 
-        if(driver_map_marker_trail.containsKey(driver)){
-            for(circle in driver_map_marker_trail.get(driver)!!){
-                circle.remove()
-            }
-            driver_map_marker_trail.get(driver)!!.clear()
-            driver_map_marker_trail.remove(driver)
-        }
+//        if(driver_map_marker_trail.containsKey(driver)){
+//            for(circle in driver_map_marker_trail.get(driver)!!){
+//                circle.remove()
+//            }
+//            driver_map_marker_trail.get(driver)!!.clear()
+//            driver_map_marker_trail.remove(driver)
+//        }
 
-        val driver_marker = mMap.addMarker(op)
-        driver_marker.tag = driver
-        driver_map_markers.put(driver,driver_marker)
 
-        for(last_loc in drivers_last_locations){
-            val circleOptions = CircleOptions()
-            circleOptions.center(last_loc.loc)
-            circleOptions.radius(1.0)
-            if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()) {
-                circleOptions.fillColor(Color.LTGRAY)
-            }else{
-                circleOptions.fillColor(Color.GREEN)
-            }
-            circleOptions.strokeWidth(0f)
-            val circle = mMap.addCircle(circleOptions)
+//        for(last_loc in drivers_last_locations){
+//            val circleOptions = CircleOptions()
+//            circleOptions.center(last_loc.loc)
+//            circleOptions.radius(1.0)
+//            if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()) {
+//                circleOptions.fillColor(Color.LTGRAY)
+//            }else{
+//                circleOptions.fillColor(Color.GREEN)
+//            }
+//            circleOptions.strokeWidth(0f)
+//            val circle = mMap.addCircle(circleOptions)
+//
+//            if(!driver_map_marker_trail.containsKey(driver)){
+//                driver_map_marker_trail.put(driver,ArrayList<Circle>())
+//            }
+//            driver_map_marker_trail.get(driver)!!.add(circle)
+//        }
+//        Handler().postDelayed({
+//            addPulsatingEffect(drivers_last_locations[drivers_last_locations.lastIndex].loc)
+//        }, 1000)
 
-            if(!driver_map_marker_trail.containsKey(driver)){
-                driver_map_marker_trail.put(driver,ArrayList<Circle>())
-            }
-            driver_map_marker_trail.get(driver)!!.add(circle)
-        }
-        addPulsatingEffect(drivers_last_locations[drivers_last_locations.lastIndex].loc)
         if(viewed_driver.equals(driver))move_camera(drivers_last_locations[drivers_last_locations.lastIndex].loc)
     }
 
@@ -951,13 +965,13 @@ class MapsActivity : AppCompatActivity(),
     }
 
     fun get_drivers_last_few_locations(drivers_positions: ArrayList<driver_pos>): ArrayList<driver_pos>{
-        val sorted_list: ArrayList<driver_pos> = ArrayList()
-        for(item in drivers_positions.sortedWith(compareBy({ it.creation_time }))){
-            sorted_list.add(item)
-        }
+//        val sorted_list: ArrayList<driver_pos> = ArrayList()
+//        for(item in drivers_positions.sortedWith(compareBy({ it.creation_time }))){
+//            sorted_list.add(item)
+//        }
 
         val last_3_list: ArrayList<driver_pos> = ArrayList()
-        last_3_list.addAll(sorted_list.takeLast(3))
+        last_3_list.addAll(drivers_positions.takeLast(3))
 
         return last_3_list
 
@@ -1339,8 +1353,9 @@ class MapsActivity : AppCompatActivity(),
         search_place_circle.add(mMap.addCircle(circleOptions))
 
 //        for(path in optimum_paths){
-//            val p = ArrayList<LatLng>()
-//            draw_route(path,Color.WHITE,"gucci")
+//            val p: MutableList<List<LatLng>> = ArrayList()
+//            p.addAll(path)
+//            draw_route(p,Color.WHITE,Calendar.getInstance().timeInMillis.toString())
 //        }
     }
 
@@ -1593,7 +1608,7 @@ class MapsActivity : AppCompatActivity(),
     }
 
     private var lastUserCircle: Circle? = null
-    private val pulseDuration: Long = 2500
+    private val pulseDuration: Long = 2000
     private var lastPulseAnimator: ValueAnimator? = null
     var rad = 200f
     private fun addPulsatingEffect(userLatlng: LatLng) {
@@ -1604,10 +1619,10 @@ class MapsActivity : AppCompatActivity(),
         if (lastUserCircle != null) lastUserCircle!!.center = userLatlng
         lastPulseAnimator = valueAnimate(ValueAnimator.AnimatorUpdateListener { animation ->
             if (lastUserCircle != null) {
-                Log.e(
-                    "addPulsatingEffect",
-                    "animation value is ${(animation.getAnimatedValue() as Float)}"
-                )
+//                Log.e(
+//                    "addPulsatingEffect",
+//                    "animation value is ${(animation.getAnimatedValue() as Float)}"
+//                )
                 lastUserCircle!!.setRadius((animation.getAnimatedValue() as Float).toDouble())
                 var col = Color.parseColor("#2271cce7")
                 if (constants.SharedPreferenceManager(applicationContext).isDarkModeOn()) {
@@ -1616,10 +1631,10 @@ class MapsActivity : AppCompatActivity(),
                 lastUserCircle!!.fillColor =
                     adjustAlpha(col, (rad - (animation.getAnimatedValue() as Float)) / rad)
             } else {
-                Log.e(
-                    "addPulsatingEffect",
-                    "animation value is ${(animation.getAnimatedValue() as Float)}"
-                )
+//                Log.e(
+//                    "addPulsatingEffect",
+//                    "animation value is ${(animation.getAnimatedValue() as Float)}"
+//                )
                 var col = Color.parseColor("#2271cce7")
                 if (constants.SharedPreferenceManager(applicationContext).isDarkModeOn()) {
                     col = Color.GRAY
@@ -1698,7 +1713,7 @@ class MapsActivity : AppCompatActivity(),
     val optimum_paths: ArrayList<List<List<LatLng>>> = ArrayList()
     fun getLocationsRoute(source: LatLng, destination: LatLng, place: Place){
         showLoadingScreen()
-        var https = "https://maps.googleapis.com/maps/api/directions/json?origin=${source.latitude},${source.longitude}&destination=${destination.latitude},${destination.longitude}&key=${Apis().directions_api}"
+        var https = "https://maps.googleapis.com/maps/api/directions/json?origin=${source.latitude},${source.longitude}&alternatives=true&destination=${destination.latitude},${destination.longitude}&key=${Apis().directions_api}"
 
         val queue = Volley.newRequestQueue(this)
         val stringRequest = JsonObjectRequest(Request.Method.GET, https,null, Response.Listener
@@ -1749,7 +1764,7 @@ class MapsActivity : AppCompatActivity(),
                 }
             }
 
-            if(matching_legs.size>2){
+            if(matching_legs.size>=1){
                 return true
             }
         }
