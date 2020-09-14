@@ -208,11 +208,11 @@
                                 <TextView
                                     android:id="@+id/source_textview"
                                     android:layout_width="match_parent"
-                                    android:layout_marginEnd="50dp"
+                                    android:layout_marginEnd="75dp"
                                     android:textSize="13sp"
                                     android:layout_marginTop="3dp"
-                                    android:layout_height="20dp"
-                                    android:text="To see the route its going." />
+                                    android:layout_height="19dp"
+                                    android:text="To see the route it's going." />
 
                                 <RelativeLayout
                                     android:id="@+id/set_source_location"
@@ -232,7 +232,7 @@
                                         <TextView
                                             android:id="@+id/set_start_loc_textview"
                                             android:layout_width="wrap_content"
-                                            android:textSize="14sp"
+                                            android:textSize="15sp"
                                             android:layout_gravity="center_vertical"
                                             android:textColor="@color/colorPrimary"
                                             android:layout_height="wrap_content"
@@ -263,8 +263,8 @@
                                     android:layout_width="match_parent"
                                     android:textSize="13sp"
                                     android:layout_marginTop="3dp"
-                                    android:layout_marginEnd="50dp"
-                                    android:layout_height="20dp"
+                                    android:layout_marginEnd="75dp"
+                                    android:layout_height="19dp"
                                     android:text="" />
 
                                 <RelativeLayout
@@ -284,7 +284,7 @@
 
                                         <TextView
                                             android:layout_width="wrap_content"
-                                            android:textSize="14sp"
+                                            android:textSize="15sp"
                                             android:layout_gravity="center_vertical"
                                             android:textColor="@color/colorPrimary"
                                             android:layout_height="wrap_content"
@@ -323,7 +323,7 @@
                     android:id="@+id/search_button_layout"
                     android:layout_alignParentBottom="true"
                     android:layout_width="match_parent"
-                    android:layout_marginBottom="10dp"
+                    android:layout_marginBottom="15dp"
                     android:background="@color/nav_bar_color"
                     android:layout_height="wrap_content">
 
@@ -342,7 +342,8 @@
                         android:layout_centerVertical="true"
                         android:layout_centerInParent="true"
                         android:scaleX="0.4"
-                        android:translationX="85dp"
+                        android:translationX="-85dp"
+                        android:translationY="1dp"
                         android:src="@drawable/search_location"
                         android:layout_height="35dp"/>
 
@@ -384,7 +385,7 @@
 
                     <ImageView
                         android:layout_width="18dp"
-                        android:layout_marginStart="10dp"
+                        android:layout_marginStart="5dp"
                         android:translationY="3dp"
                         android:src="@drawable/settings"
                         android:layout_height="15dp"/>

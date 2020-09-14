@@ -105,7 +105,6 @@ class MapsActivity : AppCompatActivity(),
     var my_marker: Marker? = null
     var my_marker_trailing_circle: Circle? = null
     var AUTOCOMPLETE_REQUEST_CODE = 1
-
     var is_loading = false
 
 
@@ -142,9 +141,11 @@ class MapsActivity : AppCompatActivity(),
 
         set_network_change_receiver()
 
-        if(!intent.hasExtra(constants.intent_source)){
-            Constants().maintain_theme(applicationContext)
-        }
+        remove_bus_route_details()
+
+//        if(!intent.hasExtra(constants.intent_source)){
+//            Constants().maintain_theme(applicationContext)
+//        }
     }
 
     fun set_network_change_receiver(){
@@ -809,6 +810,9 @@ class MapsActivity : AppCompatActivity(),
         Log.e(TAG,"onStart")
         super.onStart()
         set_session_data()
+        Constants().maintain_theme(applicationContext)
+        if(intent.hasExtra(constants.intent_source)){
+        }
     }
 
     override fun onPause() {
@@ -907,7 +911,7 @@ class MapsActivity : AppCompatActivity(),
             driver_map_marker_trail.get(driver)!!.add(circle)
         }
         Handler().postDelayed({
-            addPulsatingEffect(drivers_last_locations[drivers_last_locations.lastIndex].loc)
+            addPulsatingEffect(drivers_last_locations[drivers_last_locations.lastIndex].loc, driver)
         }, 100)
 
         if(viewed_driver.equals(driver))move_camera(drivers_last_locations[drivers_last_locations.lastIndex].loc)
@@ -1176,6 +1180,10 @@ class MapsActivity : AppCompatActivity(),
         binding.sourceTextview.text = "To see the route it's going"
         binding.destinationTextview.text = ""
         binding.viewLayout.visibility = View.GONE
+
+        binding.sourceTextview.setOnClickListener {
+//            binding.searchButton.performClick()
+        }
     }
 
     fun get_route_org(route: route): organisation?{
@@ -1220,7 +1228,8 @@ class MapsActivity : AppCompatActivity(),
             val user_loc = custom_set_start_loc
             if(optimum_paths.isEmpty())getLocationsRoute(user_loc!!,place.latLng!!, place)
             else calculate_and_show_routes(user_loc!!, place)
-        }else{
+        }
+        else{
             if(mLastKnownLocations.isNotEmpty()){
                 binding.sourceTextview.text = "From your location"
                 val user_loc = mLastKnownLocations.get(mLastKnownLocations.lastIndex)
@@ -1517,8 +1526,7 @@ class MapsActivity : AppCompatActivity(),
                     }
                 }
             }
-            val random = Random()
-            var cc = Color.argb(255, random.nextInt(256), random.nextInt(256), random.nextInt(256))
+            var cc = get_specific_route_color()
 //            if(op_route_pos.containsKey(drivers_root.route_id)){
 //                cc = get_specific_route_color(op_route_pos.get(drivers_root.route_id)!!)
 //            }
@@ -1631,47 +1639,44 @@ class MapsActivity : AppCompatActivity(),
         return if (diff < 18) radius * diff * 60 else radius * diff * 80
     }
 
-    private var lastUserCircle: Circle? = null
+    private var lastUserCircle: HashMap<String,Circle> = HashMap()
     private val pulseDuration: Long = 2000
-    private var lastPulseAnimator: ValueAnimator? = null
+    private var lastPulseAnimator: HashMap<String,ValueAnimator> = HashMap()
     var rad = 200f
-    private fun addPulsatingEffect(userLatlng: LatLng) {
-        if (lastPulseAnimator != null) {
-            lastPulseAnimator!!.cancel()
-            Log.d("onLocationUpdated: ", "cancelled")
+    private fun addPulsatingEffect(userLatlng: LatLng, driver: String) {
+        if (lastPulseAnimator.containsKey(driver)) {
+            lastPulseAnimator.get(driver)!!.cancel()
         }
-        if (lastUserCircle != null) lastUserCircle!!.center = userLatlng
-        lastPulseAnimator = valueAnimate(ValueAnimator.AnimatorUpdateListener { animation ->
-            if (lastUserCircle != null) {
-//                Log.e(
-//                    "addPulsatingEffect",
-//                    "animation value is ${(animation.getAnimatedValue() as Float)}"
-//                )
-                lastUserCircle!!.setRadius((animation.getAnimatedValue() as Float).toDouble())
+        if (lastUserCircle.containsKey(driver)) lastUserCircle.get(driver)!!.center = userLatlng
+        var lastPulse = valueAnimate(ValueAnimator.AnimatorUpdateListener { animation ->
+            if (lastUserCircle.containsKey(driver)) {
+                lastUserCircle.get(driver)!!.setRadius((animation.getAnimatedValue() as Float).toDouble())
                 var col = Color.parseColor("#2271cce7")
                 if (constants.SharedPreferenceManager(applicationContext).isDarkModeOn()) {
                     col = Color.GRAY
                 }
-                lastUserCircle!!.fillColor =
-                    adjustAlpha(col, (rad - (animation.getAnimatedValue() as Float)) / rad)
+                lastUserCircle.get(driver)!!.fillColor = adjustAlpha(col, (rad - (animation.getAnimatedValue() as Float)) / rad)
             } else {
-//                Log.e(
-//                    "addPulsatingEffect",
-//                    "animation value is ${(animation.getAnimatedValue() as Float)}"
-//                )
                 var col = Color.parseColor("#2271cce7")
                 if (constants.SharedPreferenceManager(applicationContext).isDarkModeOn()) {
                     col = Color.GRAY
                 }
-                lastUserCircle = mMap.addCircle(
-                    CircleOptions()
+                var lastCircle = mMap.addCircle(CircleOptions()
                         .center(userLatlng)
                         .radius((animation.getAnimatedValue() as Float).toDouble())
                         .fillColor(col)
                         .strokeWidth(0f)
                 )
+                if(lastUserCircle.containsKey(driver)){
+                    lastUserCircle.remove(driver)
+                }
+                lastUserCircle.put(driver,lastCircle)
             }
         })
+        if(lastPulseAnimator.containsKey(driver)){
+            lastPulseAnimator.remove(driver)
+        }
+        lastPulseAnimator.put(driver,lastPulse!!)
     }
 
     fun adjustAlpha(color: Int, factor: Float): Int {
@@ -1816,46 +1821,19 @@ class MapsActivity : AppCompatActivity(),
         return false
     }
 
-    fun get_specific_route_color(pos: Int): Int{
-        var op_route_colors: HashMap<Int, Int> = HashMap()
-        for(path in optimum_paths){
-            val path_pos = optimum_paths.indexOf(path)
-            val random = Random()
-            var cc = Color.argb(255, random.nextInt(256), random.nextInt(256), random.nextInt(256))
-
-            if(path_pos==0){
-                var r = (random.nextInt(256))
-                if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
-                    if(r<30) r=30
-                    cc = Color.argb(255, r ,255, 255)
-                }else{
-                    if(r>200) r=200
-                    cc = Color.argb(255, r, 10, 10)
-                }
-            }else if(path_pos==1){
-                var r = (random.nextInt(256))
-                if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
-                    if(r<30) r=30
-                    cc = Color.argb(255, 255 ,r, 255)
-                }else{
-                    if(r>200) r=200
-                    cc = Color.argb(255, 10, r, 10)
-                }
-            }else if(path_pos==2){
-                var r = (random.nextInt(256))
-                if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
-                    if(r<30) r=30
-                    cc = Color.argb(255, 255 ,255, r)
-                }else{
-                    if(r>200) r=200
-                    cc = Color.argb(255, 255, 10, r)
-                }
-            }
-
-            op_route_colors.put(path_pos,cc)
+    fun get_specific_route_color(): Int{
+        val random = Random()
+        if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
+            var r = (random.nextInt(205)+50)
+            var g = (random.nextInt(205)+50)
+            var b = (random.nextInt(205)+50)
+            return  Color.argb(255, r, g, b)
+        }else{
+            var r = (random.nextInt(305)-60)
+            var g = (random.nextInt(305)-60)
+            var b = (random.nextInt(305)-60)
+            return Color.argb(255, r, g, b)
         }
-
-        return op_route_colors.get(pos)!!
     }
 
 

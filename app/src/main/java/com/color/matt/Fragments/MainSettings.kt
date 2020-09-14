@@ -1,16 +1,20 @@
 package com.color.matt.Fragments
 
 import android.content.Context
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
 import android.os.Bundle
-import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.RelativeLayout
 import android.widget.Switch
 import android.widget.TextView
+import androidx.fragment.app.Fragment
 import com.color.matt.Constants
 import com.color.matt.R
+import com.google.common.reflect.Reflection.getPackageName
+
 
 class MainSettings : Fragment() {
     // TODO: Rename and change types of parameters
@@ -79,6 +83,16 @@ class MainSettings : Fragment() {
         didUserSignUp = {
             sign_in_view.visibility = View.GONE
         }
+
+        val app_vid: TextView = va.findViewById(R.id.app_vid)
+        try {
+            val pInfo: PackageInfo = context!!.packageManager.getPackageInfo(context!!.getPackageName(), 0)
+            val version = pInfo.versionName
+            app_vid.text = "Version ${version}"
+        } catch (e: PackageManager.NameNotFoundException) {
+            e.printStackTrace()
+        }
+
 
         return va
     }
