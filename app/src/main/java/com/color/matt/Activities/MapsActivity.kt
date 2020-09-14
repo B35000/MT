@@ -880,35 +880,35 @@ class MapsActivity : AppCompatActivity(),
             driver_map_markers.put(driver,driver_marker)
         }
 
-//        if(driver_map_marker_trail.containsKey(driver)){
-//            for(circle in driver_map_marker_trail.get(driver)!!){
-//                circle.remove()
-//            }
-//            driver_map_marker_trail.get(driver)!!.clear()
-//            driver_map_marker_trail.remove(driver)
-//        }
+        if(driver_map_marker_trail.containsKey(driver)){
+            for(circle in driver_map_marker_trail.get(driver)!!){
+                circle.remove()
+            }
+            driver_map_marker_trail.get(driver)!!.clear()
+            driver_map_marker_trail.remove(driver)
+        }
 
 
-//        for(last_loc in drivers_last_locations){
-//            val circleOptions = CircleOptions()
-//            circleOptions.center(last_loc.loc)
-//            circleOptions.radius(1.0)
-//            if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()) {
-//                circleOptions.fillColor(Color.LTGRAY)
-//            }else{
-//                circleOptions.fillColor(Color.GREEN)
-//            }
-//            circleOptions.strokeWidth(0f)
-//            val circle = mMap.addCircle(circleOptions)
-//
-//            if(!driver_map_marker_trail.containsKey(driver)){
-//                driver_map_marker_trail.put(driver,ArrayList<Circle>())
-//            }
-//            driver_map_marker_trail.get(driver)!!.add(circle)
-//        }
-//        Handler().postDelayed({
-//            addPulsatingEffect(drivers_last_locations[drivers_last_locations.lastIndex].loc)
-//        }, 1000)
+        for(last_loc in drivers_last_locations){
+            val circleOptions = CircleOptions()
+            circleOptions.center(last_loc.loc)
+            circleOptions.radius(1.0)
+            if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()) {
+                circleOptions.fillColor(Color.LTGRAY)
+            }else{
+                circleOptions.fillColor(Color.GREEN)
+            }
+            circleOptions.strokeWidth(0f)
+            val circle = mMap.addCircle(circleOptions)
+
+            if(!driver_map_marker_trail.containsKey(driver)){
+                driver_map_marker_trail.put(driver,ArrayList<Circle>())
+            }
+            driver_map_marker_trail.get(driver)!!.add(circle)
+        }
+        Handler().postDelayed({
+            addPulsatingEffect(drivers_last_locations[drivers_last_locations.lastIndex].loc)
+        }, 100)
 
         if(viewed_driver.equals(driver))move_camera(drivers_last_locations[drivers_last_locations.lastIndex].loc)
     }
@@ -1230,7 +1230,7 @@ class MapsActivity : AppCompatActivity(),
                 else calculate_and_show_routes(user_lat_lg,place)
             }
             else{
-                binding.sourceTextview.text = ""
+                binding.sourceTextview.text = "No set place"
                 calculate_and_show_routes(place.latLng!!,place)
             }
         }
@@ -1261,6 +1261,18 @@ class MapsActivity : AppCompatActivity(),
 
         binding.setDestinationLocation.setOnClickListener {
             set_new_ending_location()
+        }
+
+        binding.sourceTextview.setOnClickListener {
+            if(is_showing_multiple_routes){
+                binding.setSourceLocation.performClick()
+            }
+        }
+
+        binding.destinationTextview.setOnClickListener {
+            if(is_showing_multiple_routes){
+                binding.setDestinationLocation.performClick()
+            }
         }
 
         binding.searchButtonLayout.visibility = View.GONE
@@ -1315,17 +1327,30 @@ class MapsActivity : AppCompatActivity(),
 
     }
 
+    var last_calc_start_loc: LatLng? = null
+    var last_cal_place_loc: Place? = null
+    val selected_routes: ArrayList<String> = ArrayList()
     fun calculate_and_show_routes(start_loc: LatLng, place: Place){
         val lat_lng = place.latLng!!
+        if(last_calc_start_loc==null
+            || !last_calc_start_loc!!.latitude.equals(start_loc.latitude)
+            || !last_calc_start_loc!!.longitude.equals(start_loc.longitude)
+            || last_cal_place_loc==null
+            || !place.name!!.equals(last_cal_place_loc!!.name)){
+            selected_routes.clear()
+        }
+
         var closest_routes:ArrayList<route> = ArrayList()
         var added_routes: ArrayList<String> = ArrayList()
         var closest_to_me_routes:ArrayList<String> = ArrayList()
         for(route in routes){
             if(!route.disabled) {
-                if(does_route_pass_optimum_route(route)){
+                if(selected_routes.contains(route.route_id) || does_route_pass_optimum_route(route)){
                     closest_routes.add(route)
                     closest_to_me_routes.add(route.route_id)
                     added_routes.add(route.route_id)
+
+                    if(!selected_routes.contains(route.route_id))selected_routes.add(route.route_id)
                 }
             }
         }
@@ -1357,6 +1382,9 @@ class MapsActivity : AppCompatActivity(),
 //            p.addAll(path)
 //            draw_route(p,Color.WHITE,Calendar.getInstance().timeInMillis.toString())
 //        }
+
+        last_calc_start_loc = start_loc
+        last_cal_place_loc = place
     }
 
     fun get_closest_distance_to_route(set_route :route, my_location:LatLng) : Long {
@@ -1490,12 +1518,9 @@ class MapsActivity : AppCompatActivity(),
                 }
             }
             val random = Random()
-            Log.e(TAG,"random number ${random}")
             var cc = Color.argb(255, random.nextInt(256), random.nextInt(256), random.nextInt(256))
-//            if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
-//                cc = Color.argb(255, (random.nextInt(186)+30), random.nextInt(186)+70, random.nextInt(186)+70)
-//            }else{
-//                cc = Color.argb(255, Math.abs(random.nextInt(336)-30), Math.abs(random.nextInt(336)-70), Math.abs(random.nextInt(336)-70))
+//            if(op_route_pos.containsKey(drivers_root.route_id)){
+//                cc = get_specific_route_color(op_route_pos.get(drivers_root.route_id)!!)
 //            }
 
             search_loaded_routes.add(drivers_root)
@@ -1567,7 +1592,7 @@ class MapsActivity : AppCompatActivity(),
     fun draw_specific_route(route_to_draw: route, color: Int){
 //        remove_bus_route(viewed_driver)
         remove_all_drawn_route()
-
+        add_marker(route_to_draw.set_end_pos!!, constants.end_loc, route_to_draw.route_id)
         val entire_path: MutableList<List<LatLng>> = ArrayList()
         if (route_to_draw.route_directions_data!!.routes.isNotEmpty()) {
             val route = route_to_draw.route_directions_data!!.routes[0]
@@ -1581,7 +1606,6 @@ class MapsActivity : AppCompatActivity(),
             }
         }
         draw_route(entire_path,color,route_to_draw.route_id)
-//        move_camera(entire_path[0][0])
 
         for (item in route_to_draw.added_bus_stops) {
             add_marker(item.stop_location, constants.stop_loc, item.creation_time.toString())
@@ -1746,15 +1770,18 @@ class MapsActivity : AppCompatActivity(),
     }
 
 
+    var op_route_pos: HashMap<String, Int> = HashMap()
     fun does_route_pass_optimum_route(route: route): Boolean{
         if(optimum_paths.isNotEmpty()){
             val matching_legs: ArrayList<List<LatLng>> = ArrayList()
             for(optimum_route in optimum_paths){
+                val path_pos = optimum_paths.indexOf(optimum_route)
                 for(leg in optimum_route){
                     for(pot_route_leg in route.route_directions_data!!.routes[0].legs){
                         for (step in pot_route_leg.steps) {
                             val pathh: List<LatLng> = PolyUtil.decode(step.polyline.points)
                             if(do_legs_match_direction(leg,pathh)){
+                                op_route_pos.put(route.route_id,path_pos)
                                 matching_legs.add(leg)
 //                                return true
                             }
@@ -1787,6 +1814,48 @@ class MapsActivity : AppCompatActivity(),
         if(close_items.size >= 3) return true
 
         return false
+    }
+
+    fun get_specific_route_color(pos: Int): Int{
+        var op_route_colors: HashMap<Int, Int> = HashMap()
+        for(path in optimum_paths){
+            val path_pos = optimum_paths.indexOf(path)
+            val random = Random()
+            var cc = Color.argb(255, random.nextInt(256), random.nextInt(256), random.nextInt(256))
+
+            if(path_pos==0){
+                var r = (random.nextInt(256))
+                if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
+                    if(r<30) r=30
+                    cc = Color.argb(255, r ,255, 255)
+                }else{
+                    if(r>200) r=200
+                    cc = Color.argb(255, r, 10, 10)
+                }
+            }else if(path_pos==1){
+                var r = (random.nextInt(256))
+                if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
+                    if(r<30) r=30
+                    cc = Color.argb(255, 255 ,r, 255)
+                }else{
+                    if(r>200) r=200
+                    cc = Color.argb(255, 10, r, 10)
+                }
+            }else if(path_pos==2){
+                var r = (random.nextInt(256))
+                if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
+                    if(r<30) r=30
+                    cc = Color.argb(255, 255 ,255, r)
+                }else{
+                    if(r>200) r=200
+                    cc = Color.argb(255, 255, 10, r)
+                }
+            }
+
+            op_route_colors.put(path_pos,cc)
+        }
+
+        return op_route_colors.get(pos)!!
     }
 
 
