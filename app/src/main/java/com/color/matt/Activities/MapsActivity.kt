@@ -21,7 +21,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
-import android.widget.ImageView
 import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -546,6 +545,7 @@ class MapsActivity : AppCompatActivity(),
                 val place: Place = Autocomplete.getPlaceFromIntent(data!!)
                 Log.e("MapActivity", "Place: " + place.name+" and latlng: "+place.latLng!!.latitude)
                 hideKeyboard()
+                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(mMap.cameraPosition.target, mMap.cameraPosition.zoom-0.5f))
                 if(set_custom_point.equals("starting")){
                     custom_set_start_loc = place.latLng
                     custom_set_start_desc = place.name!!
@@ -914,7 +914,7 @@ class MapsActivity : AppCompatActivity(),
             addPulsatingEffect(drivers_last_locations[drivers_last_locations.lastIndex].loc, driver)
         }, 100)
 
-        if(viewed_driver.equals(driver))move_camera(drivers_last_locations[drivers_last_locations.lastIndex].loc)
+//        if(viewed_driver.equals(driver))move_camera(drivers_last_locations[drivers_last_locations.lastIndex].loc)
     }
 
     fun set_all_drivers(){
@@ -1035,6 +1035,9 @@ class MapsActivity : AppCompatActivity(),
         var op = MarkerOptions().position(lat_lng)
         var final_icon: BitmapDrawable?  = null
 
+        var height = 77
+        var width = 30
+
         if(type.equals(constants.start_loc)){
             val icon = getDrawable(R.drawable.starting_location_pin) as BitmapDrawable
             final_icon = icon
@@ -1045,11 +1048,15 @@ class MapsActivity : AppCompatActivity(),
         }
         else if(type.equals(constants.stop_loc)){
             val icon = getDrawable(R.drawable.stop_location_pin) as BitmapDrawable
+            height = 51
+            width = 20
+            final_icon = icon
+        }
+        else if(type.equals(constants.specific_route_end)){
+            val icon = getDrawable(R.drawable.specific_route_end) as BitmapDrawable
             final_icon = icon
         }
 
-        val height = 95
-        val width = 35
         if(final_icon!=null) {
             val b: Bitmap = final_icon.bitmap
             val smallMarker: Bitmap = Bitmap.createScaledBitmap(b, width, height, false)
@@ -1214,7 +1221,7 @@ class MapsActivity : AppCompatActivity(),
     var is_location_picker_open = false
     var last_searched_place: Place? = null
     fun when_search_place_result_gotten(place: Place){
-//        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(place.latLng!!.latitude, place.latLng!!.longitude), mMap.cameraPosition.zoom))
+//        showLoadingScreen()
         last_searched_place = place
         whenNetworkAvailable()
         remove_bus_route_details()
@@ -1287,6 +1294,66 @@ class MapsActivity : AppCompatActivity(),
         binding.searchButtonLayout.visibility = View.GONE
 
         set_custom_point = ""
+
+        var start_loc: LatLng? = null
+        if(custom_set_start_loc!=null){
+            start_loc = custom_set_start_loc
+        } else if(mLastKnownLocations.isNotEmpty()) {
+            val user_loc = mLastKnownLocations.get(mLastKnownLocations.lastIndex)
+            start_loc = LatLng(user_loc.latitude, user_loc.longitude)
+        }
+
+        if(start_loc!=null) {
+            var cLat: Double = (start_loc.latitude + place.latLng!!.latitude) / 2
+            var cLon: Double = (start_loc.longitude + place.latLng!!.longitude) / 2
+
+            //add skew and arcHeight to move the midPoint
+
+            //add skew and arcHeight to move the midPoint
+            val end = place.latLng!!
+            val start = start_loc
+
+            if (Math.abs(start.longitude - end.longitude) < 0.0001) {
+                cLon -= 0.0195
+            } else {
+                cLat += 0.0195
+            }
+
+            val tDelta = 1.0 / 100
+            var t = 0.0
+            val alLatLng: ArrayList<LatLng> = ArrayList()
+            if(distance_in_meters_to(start,end)>2000) {
+                while (t <= 1.0) {
+                    val oneMinusT = 1.0 - t
+                    val t2 = Math.pow(t, 2.0)
+                    val lon: Double =
+                        oneMinusT * oneMinusT * start.longitude + 2 * oneMinusT * t * cLon + t2 * end.longitude
+                    val lat: Double =
+                        oneMinusT * oneMinusT * start.latitude + 2 * oneMinusT * t * cLat + t2 * end.latitude
+                    alLatLng.add(LatLng(lat, lon))
+                    t += tDelta
+                }
+            }else{
+                alLatLng.add(start)
+            }
+            alLatLng.add(end)
+
+            // draw polyline
+
+            // draw polyline
+            val line = PolylineOptions()
+            line.width(5f)
+            line.color(Color.DKGRAY)
+            if (constants.SharedPreferenceManager(applicationContext).isDarkModeOn()) {
+                line.color(Color.LTGRAY)
+            }
+            line.addAll(alLatLng)
+            if (f != null) f!!.remove()
+            f = mMap.addPolyline(line)
+//            show_all_markers(alLatLng)
+        }
+
+        add_marker(place.latLng!!, constants.end_loc, constants.end_loc)
     }
 
     var set_custom_point = ""
@@ -1335,10 +1402,16 @@ class MapsActivity : AppCompatActivity(),
         is_location_picker_open = false
 
     }
+    
+
+
+
+
 
     var last_calc_start_loc: LatLng? = null
     var last_cal_place_loc: Place? = null
     val selected_routes: ArrayList<String> = ArrayList()
+    var f: Polyline? = null
     fun calculate_and_show_routes(start_loc: LatLng, place: Place){
         val lat_lng = place.latLng!!
         if(last_calc_start_loc==null
@@ -1347,6 +1420,8 @@ class MapsActivity : AppCompatActivity(),
             || last_cal_place_loc==null
             || !place.name!!.equals(last_cal_place_loc!!.name)){
             selected_routes.clear()
+            op_route_pos.clear()
+            added_routes_to_op_route_pos.clear()
         }
 
         var closest_routes:ArrayList<route> = ArrayList()
@@ -1354,12 +1429,20 @@ class MapsActivity : AppCompatActivity(),
         var closest_to_me_routes:ArrayList<String> = ArrayList()
         for(route in routes){
             if(!route.disabled) {
-                if(selected_routes.contains(route.route_id) || does_route_pass_optimum_route(route)){
+                if(selected_routes.contains(route.route_id)){
                     closest_routes.add(route)
                     closest_to_me_routes.add(route.route_id)
                     added_routes.add(route.route_id)
 
                     if(!selected_routes.contains(route.route_id))selected_routes.add(route.route_id)
+                }else {
+                    if(does_route_pass_optimum_route(route)){
+                        closest_routes.add(route)
+                        closest_to_me_routes.add(route.route_id)
+                        added_routes.add(route.route_id)
+
+                        if(!selected_routes.contains(route.route_id))selected_routes.add(route.route_id)
+                    }
                 }
             }
         }
@@ -1384,7 +1467,10 @@ class MapsActivity : AppCompatActivity(),
         circleOptions.fillColor(Color.parseColor("#2271cce7"))
         circleOptions.strokeWidth(0f)
 
-        search_place_circle.add(mMap.addCircle(circleOptions))
+//        search_place_circle.add(mMap.addCircle(circleOptions))
+
+        add_marker(lat_lng, constants.end_loc, constants.end_loc)
+        add_marker(start_loc, constants.start_loc, constants.start_loc)
 
 //        for(path in optimum_paths){
 //            val p: MutableList<List<LatLng>> = ArrayList()
@@ -1394,6 +1480,8 @@ class MapsActivity : AppCompatActivity(),
 
         last_calc_start_loc = start_loc
         last_cal_place_loc = place
+
+        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(mMap.cameraPosition.target, mMap.cameraPosition.zoom+0.5f))
     }
 
     fun get_closest_distance_to_route(set_route :route, my_location:LatLng) : Long {
@@ -1411,13 +1499,13 @@ class MapsActivity : AppCompatActivity(),
         }
 
         var closest_point = entire_path[0][0]
-        var its_distance_to_me = distance_to(closest_point, my_location)
+        var its_distance_to_me = distance_in_meters_to(closest_point, my_location)
         for(path in entire_path){
             for(point in path){
-                if(distance_to(point, my_location)<its_distance_to_me){
+                if(distance_in_meters_to(point, my_location)<its_distance_to_me){
                     //this point is shorter
                     closest_point = point
-                    its_distance_to_me = distance_to(point, my_location)
+                    its_distance_to_me = distance_in_meters_to(point, my_location)
                 }
             }
         }
@@ -1425,7 +1513,7 @@ class MapsActivity : AppCompatActivity(),
         return its_distance_to_me
     }
 
-    fun distance_to(lat_lng: LatLng, other_lat_lng: LatLng): Long{
+    fun distance_in_meters_to(lat_lng: LatLng, other_lat_lng: LatLng): Long{
         val loc1 = Location("")
         loc1.latitude = lat_lng.latitude
         loc1.longitude = lat_lng.longitude
@@ -1440,11 +1528,12 @@ class MapsActivity : AppCompatActivity(),
 
 
 
-    var selected_route: route? = null
+    var selected_route_objects: ArrayList<route> = ArrayList()
+    var selected_op_route = ""
     val search_loaded_route_colors: HashMap<String,Int> = HashMap()
     val search_loaded_routes: ArrayList<route> = ArrayList()
     var item_pos = 0
-    internal inner class newBusStopsListAdapter(val place: Place): RecyclerView.Adapter<ViewHolderRoutes>() {
+    internal inner class routesListAdapter(val place: String, val searched_place: Place): RecyclerView.Adapter<ViewHolderRoutes>() {
 
         override fun onCreateViewHolder(viewGroup: ViewGroup, viewType: Int): ViewHolderRoutes {
             val vh = ViewHolderRoutes(LayoutInflater.from(baseContext).inflate(R.layout.recycler_item_direction_route, viewGroup, false))
@@ -1452,13 +1541,15 @@ class MapsActivity : AppCompatActivity(),
         }
 
         override fun onBindViewHolder(v: ViewHolderRoutes, position: Int) {
-            val item = search_loaded_routes.get(position)
+            val item = op_route_pos[place]!!.get(position)
             var item_color = search_loaded_route_colors.get(item.route_id)
-            if(selected_route!=null && !selected_route!!.route_id.equals(item.route_id)){
-                if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
-                    item_color = Color.LTGRAY
-                }else{
-                    item_color = Color.GRAY
+            if(!selected_op_route.equals("")){
+                if(!selected_op_route.equals(place)){
+                    if(constants.SharedPreferenceManager(applicationContext).isDarkModeOn()){
+                        item_color = Color.LTGRAY
+                    }else{
+                        item_color = Color.GRAY
+                    }
                 }
             }
 
@@ -1475,24 +1566,33 @@ class MapsActivity : AppCompatActivity(),
 
             v.route_card.setCardBackgroundColor(item_color!!)
 
+            val op_route: ArrayList<route> = op_route_pos.get(place)!!
             v.loaded_route_relative.setOnClickListener {
-                item_pos = position
-                if(selected_route==null){
-                    selected_route = item
-                    draw_specific_route(item,item_color)
+                if(!selected_op_route.equals(place)) {
+                    item_pos = place.toInt()
+                    if(selected_route_objects.isNotEmpty()){
+                        remove_drawn_route_pins(selected_route_objects)
+                        selected_route_objects.clear()
+                    }
 
-                    binding.searchedRoutesRecyclerview.adapter = newBusStopsListAdapter(place)
-                    binding.searchedRoutesRecyclerview.layoutManager = LinearLayoutManager(applicationContext,LinearLayoutManager.HORIZONTAL, false)
-                    binding.searchedRoutesRecyclerview.scrollToPosition(item_pos)
-                }else{
-                    selected_route = null
-                    when_search_place_result_gotten(place)
+                    selected_route_objects.addAll(op_route)
+                    selected_op_route = place
+
+                    val item_colors: ArrayList<Int> = ArrayList()
+                    for (r in op_route) {
+                        item_colors.add(search_loaded_route_colors.get(r.route_id)!!)
+                    }
+
+                    draw_specific_routes(selected_route_objects, item_colors)
+                    binding.searchedRoutesRecyclerview.adapter!!.notifyDataSetChanged()
+//                    binding.searchedRoutesRecyclerview.scrollToPosition(item_pos)
                 }
             }
+
         }
 
         override fun getItemCount():Int {
-            return search_loaded_routes.size
+            return op_route_pos[place]!!.size
         }
 
     }
@@ -1503,6 +1603,64 @@ class MapsActivity : AppCompatActivity(),
         val drivers_number: TextView = view.findViewById(R.id.drivers_number)
         val loaded_route_relative: RelativeLayout = view.findViewById(R.id.loaded_route_relative)
     }
+
+
+
+    internal inner class routesListContainerAdapter(val place: Place): RecyclerView.Adapter<ViewHolderRoutesContainer>() {
+
+        override fun onCreateViewHolder(viewGroup: ViewGroup, viewType: Int): ViewHolderRoutesContainer {
+            val vh = ViewHolderRoutesContainer(LayoutInflater.from(baseContext).inflate(R.layout.recycler_item_direction_route_container, viewGroup, false))
+            return vh
+        }
+
+        override fun onBindViewHolder(v: ViewHolderRoutesContainer, position: Int) {
+            val op_route: ArrayList<route> = op_route_pos.get(position.toString())!!
+
+            v.specific_route_items.adapter = routesListAdapter(position.toString(),place)
+            v.specific_route_items.layoutManager = LinearLayoutManager(applicationContext,LinearLayoutManager.HORIZONTAL, false)
+            v.specific_route_items.scrollToPosition(item_pos)
+
+            if(!selected_op_route.equals("")){
+                if(!selected_op_route.equals(position.toString())){
+                    v.route_container.setBackgroundColor(Color.TRANSPARENT)
+                }
+            }
+
+            v.specific_route_items.setOnClickListener {
+//                item_pos = position
+//                if(selected_route_objects.isEmpty()){
+//                    selected_route_objects.addAll(op_route)
+//                    selected_op_route = position.toString()
+//
+//                    val item_colors: ArrayList<Int> = ArrayList()
+//                    for(r in op_route){
+//                        item_colors.add(search_loaded_route_colors.get(r.route_id)!!)
+//                    }
+//
+//                    draw_specific_routes(selected_route_objects,item_colors)
+//
+//                    binding.searchedRoutesRecyclerview.adapter = routesListContainerAdapter(place)
+//                    binding.searchedRoutesRecyclerview.layoutManager = LinearLayoutManager(applicationContext,LinearLayoutManager.HORIZONTAL, false)
+//                    binding.searchedRoutesRecyclerview.scrollToPosition(item_pos)
+//                }else{
+//                    selected_route_objects.clear()
+//                    selected_op_route = ""
+//                    when_search_place_result_gotten(place)
+//                }
+            }
+        }
+
+        override fun getItemCount():Int {
+            return op_route_pos.size
+        }
+
+    }
+
+    internal inner class ViewHolderRoutesContainer (view: View) : RecyclerView.ViewHolder(view) {
+        val route_container: RelativeLayout = view.findViewById(R.id.route_container)
+        val specific_route_items: RecyclerView = view.findViewById(R.id.specific_route_items)
+    }
+
 
 
 
@@ -1527,31 +1685,13 @@ class MapsActivity : AppCompatActivity(),
                 }
             }
             var cc = get_specific_route_color()
-//            if(op_route_pos.containsKey(drivers_root.route_id)){
-//                cc = get_specific_route_color(op_route_pos.get(drivers_root.route_id)!!)
-//            }
-
             search_loaded_routes.add(drivers_root)
             if(!search_loaded_route_colors.containsKey(drivers_root.route_id)){
                 search_loaded_route_colors.put(drivers_root.route_id, cc)
             }else{
                 cc = search_loaded_route_colors.get(drivers_root.route_id)!!
             }
-            draw_route(entire_path,cc,drivers_root.route_id)
-            val rad = 10.0
-            var circleOptions = CircleOptions()
-            circleOptions.center(entire_path[0][0])
-            circleOptions.radius(rad)
-            circleOptions.fillColor(cc)
-            circleOptions.strokeWidth(0f)
-
-            search_place_circle.add(mMap.addCircle(circleOptions))
-            circleOptions = CircleOptions()
-            circleOptions.center(entire_path[entire_path.lastIndex][entire_path[entire_path.lastIndex].lastIndex])
-            circleOptions.radius(rad)
-            circleOptions.fillColor(cc)
-            circleOptions.strokeWidth(0f)
-            search_place_circle.add(mMap.addCircle(circleOptions))
+//            draw_route(entire_path,cc,drivers_root.route_id)
 
 //            for (item in drivers_root.added_bus_stops) {
 //                add_marker(item.stop_location, constants.stop_loc, item.creation_time.toString())
@@ -1562,13 +1702,32 @@ class MapsActivity : AppCompatActivity(),
             array.add(lat_lng)
             array.add(my_lat_lng)
             show_all_markers(array)
-        }, 500)
+        }, 50)
         is_showing_multiple_routes = true
 
-        binding.searchedRoutesRecyclerview.visibility = View.VISIBLE
-        binding.searchedRoutesRecyclerview.adapter = newBusStopsListAdapter(place)
-        binding.searchedRoutesRecyclerview.layoutManager = LinearLayoutManager(applicationContext,LinearLayoutManager.HORIZONTAL, false)
-        binding.searchedRoutesRecyclerview.scrollToPosition(item_pos)
+        if(op_route_pos.isNotEmpty()) {
+            selected_op_route = "0"
+            binding.searchedRoutesRecyclerview.visibility = View.VISIBLE
+            binding.searchedRoutesRecyclerview.adapter = routesListContainerAdapter(place)
+            binding.searchedRoutesRecyclerview.layoutManager =
+                LinearLayoutManager(applicationContext, LinearLayoutManager.HORIZONTAL, false)
+            binding.searchedRoutesRecyclerview.scrollToPosition(item_pos)
+
+            hideLoadingScreen()
+
+            val op_route: ArrayList<route> = op_route_pos.get(selected_op_route)!!
+            selected_route_objects.clear()
+            item_pos = 0
+            selected_route_objects.addAll(op_route)
+            val item_colors: ArrayList<Int> = ArrayList()
+            for (r in op_route) {
+                item_colors.add(search_loaded_route_colors.get(r.route_id)!!)
+            }
+
+            draw_specific_routes(selected_route_objects, item_colors)
+        }else{
+            binding.searchedRoutesRecyclerview.visibility = View.GONE
+        }
     }
 
     fun remove_multiple_routes(){
@@ -1593,31 +1752,55 @@ class MapsActivity : AppCompatActivity(),
         remove_bus_route_details()
         last_searched_place = null
         optimum_paths.clear()
+        if(f!=null)f!!.remove()
         custom_set_start_desc = ""
         binding.searchButtonLayout.visibility = View.VISIBLE
     }
 
-    fun draw_specific_route(route_to_draw: route, color: Int){
+    fun draw_specific_routes(routes_to_draw: ArrayList<route>, colors: ArrayList<Int>){
 //        remove_bus_route(viewed_driver)
         remove_all_drawn_route()
-        add_marker(route_to_draw.set_end_pos!!, constants.end_loc, route_to_draw.route_id)
-        val entire_path: MutableList<List<LatLng>> = ArrayList()
-        if (route_to_draw.route_directions_data!!.routes.isNotEmpty()) {
-            val route = route_to_draw.route_directions_data!!.routes[0]
-            for (leg in route.legs) {
-                Log.e(TAG, "leg start adress: ${leg.start_address}")
-                for (step in leg.steps) {
-                    Log.e(TAG, "step maneuver: ${step.maneuver}")
-                    val pathh: List<LatLng> = PolyUtil.decode(step.polyline.points)
-                    entire_path.add(pathh)
+
+        for(route_to_draw in routes_to_draw){
+            val color = colors.get(routes_to_draw.indexOf(route_to_draw))
+
+
+            val entire_path: MutableList<List<LatLng>> = ArrayList()
+            if (route_to_draw.route_directions_data!!.routes.isNotEmpty()) {
+                val route = route_to_draw.route_directions_data!!.routes[0]
+                for (leg in route.legs) {
+                    Log.e(TAG, "leg start adress: ${leg.start_address}")
+                    for (step in leg.steps) {
+                        Log.e(TAG, "step maneuver: ${step.maneuver}")
+                        val pathh: List<LatLng> = PolyUtil.decode(step.polyline.points)
+                        entire_path.add(pathh)
+                    }
                 }
             }
-        }
-        draw_route(entire_path,color,route_to_draw.route_id)
+            add_marker(entire_path.get(entire_path.lastIndex).get(entire_path.get(entire_path.lastIndex).lastIndex), constants.specific_route_end, route_to_draw.route_id)
+            draw_route(entire_path,color,route_to_draw.route_id)
 
-        for (item in route_to_draw.added_bus_stops) {
-            add_marker(item.stop_location, constants.stop_loc, item.creation_time.toString())
+            for (item in route_to_draw.added_bus_stops) {
+                add_marker(item.stop_location, constants.stop_loc, item.creation_time.toString())
+            }
         }
+    }
+
+    fun remove_drawn_route_pins(routes_to_draw: ArrayList<route>){
+        for(item in routes_to_draw){
+            if(added_markers.containsKey(item.route_id)){
+                added_markers.get(item.route_id)!!.remove()
+                added_markers.remove(item.route_id)
+            }
+            for(stop in item.added_bus_stops){
+                if(added_markers.containsKey(stop.creation_time.toString())){
+                    added_markers.get(stop.creation_time.toString())!!.remove()
+                    added_markers.remove(stop.creation_time.toString())
+                }
+            }
+
+        }
+
     }
 
 
@@ -1639,23 +1822,23 @@ class MapsActivity : AppCompatActivity(),
         return if (diff < 18) radius * diff * 60 else radius * diff * 80
     }
 
-    private var lastUserCircle: HashMap<String,Circle> = HashMap()
+    private var lastUserCircleList: HashMap<String,Circle> = HashMap()
     private val pulseDuration: Long = 2000
-    private var lastPulseAnimator: HashMap<String,ValueAnimator> = HashMap()
+    private var lastPulseAnimatorList: HashMap<String,ValueAnimator> = HashMap()
     var rad = 200f
     private fun addPulsatingEffect(userLatlng: LatLng, driver: String) {
-        if (lastPulseAnimator.containsKey(driver)) {
-            lastPulseAnimator.get(driver)!!.cancel()
+        if (lastPulseAnimatorList.containsKey(driver)) {
+            lastPulseAnimatorList.get(driver)!!.cancel()
         }
-        if (lastUserCircle.containsKey(driver)) lastUserCircle.get(driver)!!.center = userLatlng
+        if (lastUserCircleList.containsKey(driver)) lastUserCircleList.get(driver)!!.center = userLatlng
         var lastPulse = valueAnimate(ValueAnimator.AnimatorUpdateListener { animation ->
-            if (lastUserCircle.containsKey(driver)) {
-                lastUserCircle.get(driver)!!.setRadius((animation.getAnimatedValue() as Float).toDouble())
+            if (lastUserCircleList.containsKey(driver)) {
+                lastUserCircleList.get(driver)!!.setRadius((animation.getAnimatedValue() as Float).toDouble())
                 var col = Color.parseColor("#2271cce7")
                 if (constants.SharedPreferenceManager(applicationContext).isDarkModeOn()) {
                     col = Color.GRAY
                 }
-                lastUserCircle.get(driver)!!.fillColor = adjustAlpha(col, (rad - (animation.getAnimatedValue() as Float)) / rad)
+                lastUserCircleList.get(driver)!!.fillColor = adjustAlpha(col, (rad - (animation.getAnimatedValue() as Float)) / rad)
             } else {
                 var col = Color.parseColor("#2271cce7")
                 if (constants.SharedPreferenceManager(applicationContext).isDarkModeOn()) {
@@ -1667,16 +1850,16 @@ class MapsActivity : AppCompatActivity(),
                         .fillColor(col)
                         .strokeWidth(0f)
                 )
-                if(lastUserCircle.containsKey(driver)){
-                    lastUserCircle.remove(driver)
+                if(lastUserCircleList.containsKey(driver)){
+                    lastUserCircleList.remove(driver)
                 }
-                lastUserCircle.put(driver,lastCircle)
+                lastUserCircleList.put(driver,lastCircle)
             }
         })
-        if(lastPulseAnimator.containsKey(driver)){
-            lastPulseAnimator.remove(driver)
+        if(lastPulseAnimatorList.containsKey(driver)){
+            lastPulseAnimatorList.remove(driver)
         }
-        lastPulseAnimator.put(driver,lastPulse!!)
+        lastPulseAnimatorList.put(driver,lastPulse!!)
     }
 
     fun adjustAlpha(color: Int, factor: Float): Int {
@@ -1697,6 +1880,7 @@ class MapsActivity : AppCompatActivity(),
         va.start()
         return va
     }
+
 
 
 
@@ -1744,6 +1928,9 @@ class MapsActivity : AppCompatActivity(),
         showLoadingScreen()
         var https = "https://maps.googleapis.com/maps/api/directions/json?origin=${source.latitude},${source.longitude}&alternatives=true&destination=${destination.latitude},${destination.longitude}&key=${Apis().directions_api}"
 
+        if(distance_in_meters_to(source,destination)>=(30*1000)){
+            https = "https://maps.googleapis.com/maps/api/directions/json?origin=${source.latitude},${source.longitude}&alternatives=false&destination=${destination.latitude},${destination.longitude}&key=${Apis().directions_api}"
+        }
         val queue = Volley.newRequestQueue(this)
         val stringRequest = JsonObjectRequest(Request.Method.GET, https,null, Response.Listener
         { response ->
@@ -1775,7 +1962,10 @@ class MapsActivity : AppCompatActivity(),
     }
 
 
-    var op_route_pos: HashMap<String, Int> = HashMap()
+
+
+    var op_route_pos: HashMap<String, ArrayList<route>> = HashMap()
+    var added_routes_to_op_route_pos: HashMap<String, ArrayList<String>> = HashMap()
     fun does_route_pass_optimum_route(route: route): Boolean{
         if(optimum_paths.isNotEmpty()){
             val matching_legs: ArrayList<List<LatLng>> = ArrayList()
@@ -1786,12 +1976,23 @@ class MapsActivity : AppCompatActivity(),
                         for (step in pot_route_leg.steps) {
                             val pathh: List<LatLng> = PolyUtil.decode(step.polyline.points)
                             if(do_legs_match_direction(leg,pathh)){
-                                op_route_pos.put(route.route_id,path_pos)
+                                if(op_route_pos.containsKey(path_pos.toString())){
+                                    if(!added_routes_to_op_route_pos.get(path_pos.toString())!!.contains(route.route_id)){
+                                        added_routes_to_op_route_pos.get(path_pos.toString())!!.add(route.route_id)
+                                        op_route_pos.get(path_pos.toString())!!.add(route)
+                                    }
+                                }else{
+                                    val list = ArrayList<route>()
+                                    val id_list = ArrayList<String>()
+                                    list.add(route)
+                                    id_list.add(route.route_id)
+                                    added_routes_to_op_route_pos.put(path_pos.toString(),id_list)
+                                    op_route_pos.put(path_pos.toString(), list)
+                                }
                                 matching_legs.add(leg)
 //                                return true
                             }
                         }
-
                     }
                 }
             }
@@ -1810,7 +2011,7 @@ class MapsActivity : AppCompatActivity(),
             if(route_leg.lastIndex > item_pos){
                 val route_leg_item = route_leg.get(item_pos)
 
-                if(distance_to(item,route_leg_item) <= constants.route_leg_distance_threshold){
+                if(distance_in_meters_to(item,route_leg_item) <= constants.route_leg_distance_threshold){
                     close_items.add(route_leg_item)
                 }
             }

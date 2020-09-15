@@ -18,6 +18,7 @@
     <color name="new_loc_text_color">#FFFFFF</color>
     <color name="route_color">#FCFCFF</color>
     <color name="route_back">#158467</color>
+    <color name="route_container_color">#2b2b2b</color>
 
     <color name="white">#FFFFFF</color>
     <color name="black">#121212</color>

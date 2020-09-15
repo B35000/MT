@@ -15,8 +15,10 @@
         <androidx.cardview.widget.CardView
             android:id="@+id/route_card"
             android:layout_width="35dp"
+            android:layout_margin="2dp"
             app:cardBackgroundColor="@color/new_loc_back"
             app:cardCornerRadius="10dp"
+            android:elevation="0dp"
             android:layout_height="7dp">
 
         </androidx.cardview.widget.CardView>
