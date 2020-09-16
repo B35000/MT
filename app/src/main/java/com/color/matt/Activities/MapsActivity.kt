@@ -64,6 +64,7 @@ import com.google.maps.android.PolyUtil
 import java.io.Serializable
 import java.math.RoundingMode
 import java.util.*
+import java.util.Arrays.asList
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 import kotlin.concurrent.schedule
@@ -535,6 +536,8 @@ class MapsActivity : AppCompatActivity(),
 
             true
         }
+
+        onBackPressed()
 
     }
 
@@ -1684,7 +1687,8 @@ class MapsActivity : AppCompatActivity(),
                     }
                 }
             }
-            var cc = get_specific_route_color()
+//            var cc = get_specific_route_color()
+            var cc = get_random_chosen_color()
             search_loaded_routes.add(drivers_root)
             if(!search_loaded_route_colors.containsKey(drivers_root.route_id)){
                 search_loaded_route_colors.put(drivers_root.route_id, cc)
@@ -2035,6 +2039,53 @@ class MapsActivity : AppCompatActivity(),
             var b = (random.nextInt(305)-60)
             return Color.argb(255, r, g, b)
         }
+    }
+
+    fun get_random_chosen_color(): Int{
+        var colors= arrayListOf<String>()
+        colors.addAll(
+            listOf(
+                "#641E16",
+                "#C0392B",
+                "#922B21",
+                "#CB4335",
+                "#943126",
+                "#76448A",
+                "#AF7AC5",
+                "#5499C7",
+                "#2471A3",
+                "#21618C",
+                "#148F77",
+                "#117864",
+                "#117A65",
+                "#229954",
+                "#196F3D",
+                "#239B56",
+                "#F4D03F",
+                "#B7950B",
+                "#D68910",
+                "#E67E22",
+                "#D35400",
+                "#34495E",
+                "#515A5A",
+                "#E91E63",
+                "#9C27B0",
+                "#FBC02D",
+                "#FF5722",
+                "#5C6BC0",
+                "#FF5722",
+                "#F06292",
+                "#F44336",
+                "#00BCD4",
+                "#1E88E5",
+                "#4CAF50",
+                "#FFEB3B",
+                "#3949AB"
+            )
+        )
+        Collections.shuffle(colors)
+        val random = Random()
+        return Color.parseColor(colors[random.nextInt(colors.size)])
     }
 
 
