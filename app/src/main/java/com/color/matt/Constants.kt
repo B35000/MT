@@ -48,6 +48,8 @@ class Constants {
     val views = "views"
     val route_leg_distance_threshold = 10
     val specific_route_end = "specific_route_end"
+    val multiple_route_distance_limit = (30*1000)
+    val max_step_size = 50
 
     fun touch_vibrate(context: Context?){
         val vibrator = context?.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator

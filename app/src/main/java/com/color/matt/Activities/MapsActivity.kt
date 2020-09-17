@@ -64,7 +64,6 @@ import com.google.maps.android.PolyUtil
 import java.io.Serializable
 import java.math.RoundingMode
 import java.util.*
-import java.util.Arrays.asList
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 import kotlin.concurrent.schedule
@@ -1160,7 +1159,7 @@ class MapsActivity : AppCompatActivity(),
                 builder.include(marker)
             }
             val bounds = builder.build()
-            val padding = dpToPx(120)
+            val padding = dpToPx(80)
             val cu: CameraUpdate = CameraUpdateFactory.newLatLngBounds(bounds, padding)
             mMap.animateCamera(cu)
         }
@@ -1226,6 +1225,11 @@ class MapsActivity : AppCompatActivity(),
     fun when_search_place_result_gotten(place: Place){
 //        showLoadingScreen()
         last_searched_place = place
+        remove_all_drawn_route()
+        if(selected_route_objects.isNotEmpty()){
+            remove_drawn_route_pins(selected_route_objects)
+            selected_route_objects.clear()
+        }
         whenNetworkAvailable()
         remove_bus_route_details()
 
@@ -1307,53 +1311,7 @@ class MapsActivity : AppCompatActivity(),
         }
 
         if(start_loc!=null) {
-            var cLat: Double = (start_loc.latitude + place.latLng!!.latitude) / 2
-            var cLon: Double = (start_loc.longitude + place.latLng!!.longitude) / 2
-
-            //add skew and arcHeight to move the midPoint
-
-            //add skew and arcHeight to move the midPoint
-            val end = place.latLng!!
-            val start = start_loc
-
-            if (Math.abs(start.longitude - end.longitude) < 0.0001) {
-                cLon -= 0.0195
-            } else {
-                cLat += 0.0195
-            }
-
-            val tDelta = 1.0 / 100
-            var t = 0.0
-            val alLatLng: ArrayList<LatLng> = ArrayList()
-            if(distance_in_meters_to(start,end)>2000) {
-                while (t <= 1.0) {
-                    val oneMinusT = 1.0 - t
-                    val t2 = Math.pow(t, 2.0)
-                    val lon: Double =
-                        oneMinusT * oneMinusT * start.longitude + 2 * oneMinusT * t * cLon + t2 * end.longitude
-                    val lat: Double =
-                        oneMinusT * oneMinusT * start.latitude + 2 * oneMinusT * t * cLat + t2 * end.latitude
-                    alLatLng.add(LatLng(lat, lon))
-                    t += tDelta
-                }
-            }else{
-                alLatLng.add(start)
-            }
-            alLatLng.add(end)
-
-            // draw polyline
-
-            // draw polyline
-            val line = PolylineOptions()
-            line.width(5f)
-            line.color(Color.DKGRAY)
-            if (constants.SharedPreferenceManager(applicationContext).isDarkModeOn()) {
-                line.color(Color.LTGRAY)
-            }
-            line.addAll(alLatLng)
-            if (f != null) f!!.remove()
-            f = mMap.addPolyline(line)
-//            show_all_markers(alLatLng)
+            draw_flight(start_loc,place.latLng!!)
         }
 
         add_marker(place.latLng!!, constants.end_loc, constants.end_loc)
@@ -1581,14 +1539,20 @@ class MapsActivity : AppCompatActivity(),
                     selected_route_objects.addAll(op_route)
                     selected_op_route = place
 
+                    val array = ArrayList<LatLng>()
                     val item_colors: ArrayList<Int> = ArrayList()
                     for (r in op_route) {
                         item_colors.add(search_loaded_route_colors.get(r.route_id)!!)
+
+                        array.add(r.set_start_pos!!)
+                        array.add(r.set_end_pos!!)
                     }
 
                     draw_specific_routes(selected_route_objects, item_colors)
                     binding.searchedRoutesRecyclerview.adapter!!.notifyDataSetChanged()
 //                    binding.searchedRoutesRecyclerview.scrollToPosition(item_pos)
+
+//                    if(array.isNotEmpty())show_all_markers(array)
                 }
             }
 
@@ -1606,8 +1570,6 @@ class MapsActivity : AppCompatActivity(),
         val drivers_number: TextView = view.findViewById(R.id.drivers_number)
         val loaded_route_relative: RelativeLayout = view.findViewById(R.id.loaded_route_relative)
     }
-
-
 
     internal inner class routesListContainerAdapter(val place: Place): RecyclerView.Adapter<ViewHolderRoutesContainer>() {
 
@@ -1669,13 +1631,13 @@ class MapsActivity : AppCompatActivity(),
 
     var is_showing_multiple_routes = false
     var open_bus_route = ""
-    fun load_multiple_routes(routes: ArrayList<route>, lat_lng: LatLng, my_lat_lng: LatLng, place: Place){
+    fun load_multiple_routes(routes: ArrayList<route>, my_end_lat_lng: LatLng, my_start_lat_lng: LatLng, place: Place){
         search_loaded_routes.clear()
-
+        chosen_colors.clear()
         remove_bus_route(viewed_driver)
         remove_all_drawn_route()
-        add_marker(lat_lng, constants.end_loc, constants.end_loc)
-        add_marker(my_lat_lng, constants.start_loc, constants.start_loc)
+        add_marker(my_end_lat_lng, constants.end_loc, constants.end_loc)
+        add_marker(my_start_lat_lng, constants.start_loc, constants.start_loc)
         for(drivers_root in routes){
             val entire_path: MutableList<List<LatLng>> = ArrayList()
             if (drivers_root.route_directions_data!!.routes.isNotEmpty()) {
@@ -1689,6 +1651,10 @@ class MapsActivity : AppCompatActivity(),
             }
 //            var cc = get_specific_route_color()
             var cc = get_random_chosen_color()
+            if(!chosen_colors.contains(cc)){
+                chosen_colors.add(cc)
+            }else cc = get_specific_route_color()
+
             search_loaded_routes.add(drivers_root)
             if(!search_loaded_route_colors.containsKey(drivers_root.route_id)){
                 search_loaded_route_colors.put(drivers_root.route_id, cc)
@@ -1703,8 +1669,8 @@ class MapsActivity : AppCompatActivity(),
         }
         Handler().postDelayed({
             val array = ArrayList<LatLng>()
-            array.add(lat_lng)
-            array.add(my_lat_lng)
+            array.add(my_end_lat_lng)
+            array.add(my_start_lat_lng)
             show_all_markers(array)
         }, 50)
         is_showing_multiple_routes = true
@@ -1732,6 +1698,8 @@ class MapsActivity : AppCompatActivity(),
         }else{
             binding.searchedRoutesRecyclerview.visibility = View.GONE
         }
+
+        draw_flight(my_start_lat_lng,my_end_lat_lng)
     }
 
     fun remove_multiple_routes(){
@@ -1764,11 +1732,10 @@ class MapsActivity : AppCompatActivity(),
     fun draw_specific_routes(routes_to_draw: ArrayList<route>, colors: ArrayList<Int>){
 //        remove_bus_route(viewed_driver)
         remove_all_drawn_route()
+        val array = ArrayList<LatLng>()
 
         for(route_to_draw in routes_to_draw){
             val color = colors.get(routes_to_draw.indexOf(route_to_draw))
-
-
             val entire_path: MutableList<List<LatLng>> = ArrayList()
             if (route_to_draw.route_directions_data!!.routes.isNotEmpty()) {
                 val route = route_to_draw.route_directions_data!!.routes[0]
@@ -1782,12 +1749,18 @@ class MapsActivity : AppCompatActivity(),
                 }
             }
             add_marker(entire_path.get(entire_path.lastIndex).get(entire_path.get(entire_path.lastIndex).lastIndex), constants.specific_route_end, route_to_draw.route_id)
+
+            array.add(route_to_draw.set_start_pos!!)
+            array.add(route_to_draw.set_end_pos!!)
+
             draw_route(entire_path,color,route_to_draw.route_id)
 
             for (item in route_to_draw.added_bus_stops) {
                 add_marker(item.stop_location, constants.stop_loc, item.creation_time.toString())
             }
         }
+
+//        if(array.isNotEmpty())show_all_markers(array)
     }
 
     fun remove_drawn_route_pins(routes_to_draw: ArrayList<route>){
@@ -1932,8 +1905,8 @@ class MapsActivity : AppCompatActivity(),
         showLoadingScreen()
         var https = "https://maps.googleapis.com/maps/api/directions/json?origin=${source.latitude},${source.longitude}&alternatives=true&destination=${destination.latitude},${destination.longitude}&key=${Apis().directions_api}"
 
-        if(distance_in_meters_to(source,destination)>=(30*1000)){
-            https = "https://maps.googleapis.com/maps/api/directions/json?origin=${source.latitude},${source.longitude}&alternatives=false&destination=${destination.latitude},${destination.longitude}&key=${Apis().directions_api}"
+        if(distance_in_meters_to(source,destination)>=constants.multiple_route_distance_limit){
+            https = "https://maps.googleapis.com/maps/api/directions/json?origin=${source.latitude},${source.longitude}&destination=${destination.latitude},${destination.longitude}&key=${Apis().directions_api}"
         }
         val queue = Volley.newRequestQueue(this)
         val stringRequest = JsonObjectRequest(Request.Method.GET, https,null, Response.Listener
@@ -1945,9 +1918,15 @@ class MapsActivity : AppCompatActivity(),
             if(directionsData.routes.isNotEmpty()){
                 for(route in directionsData.routes) {
                     val entire_path: MutableList<List<LatLng>> = ArrayList()
+                    Log.e(TAG,"number of legs: ${route.legs.size}")
                     for (leg in route.legs) {
+                        Log.e(TAG,"number of steps: ${leg.steps.size}")
                         for (step in leg.steps) {
-                            val pathh: List<LatLng> = PolyUtil.decode(step.polyline.points)
+                            var pathh: List<LatLng> = PolyUtil.decode(step.polyline.points)
+                            if(pathh.size > constants.max_step_size){
+                               pathh = trim_loaded_path(pathh)
+                            }
+                            Log.e(TAG,"path list size: ${pathh.size}")
                             entire_path.add(pathh)
                         }
                     }
@@ -2041,46 +2020,21 @@ class MapsActivity : AppCompatActivity(),
         }
     }
 
+    var chosen_colors: ArrayList<Int> = ArrayList()
     fun get_random_chosen_color(): Int{
         var colors= arrayListOf<String>()
         colors.addAll(
             listOf(
-                "#641E16",
-                "#C0392B",
-                "#922B21",
-                "#CB4335",
-                "#943126",
-                "#76448A",
-                "#AF7AC5",
-                "#5499C7",
-                "#2471A3",
-                "#21618C",
-                "#148F77",
-                "#117864",
-                "#117A65",
-                "#229954",
-                "#196F3D",
-                "#239B56",
-                "#F4D03F",
-                "#B7950B",
-                "#D68910",
-                "#E67E22",
-                "#D35400",
-                "#34495E",
-                "#515A5A",
-                "#E91E63",
-                "#9C27B0",
-                "#FBC02D",
+                "#B71C1C",
+                "#880E4F",
+                "#6A1B9A",
+                "#1976D2",
+                "#00838F",
+                "#00796B",
+                "#2E7D32",
+                "#F9A825",
                 "#FF5722",
-                "#5C6BC0",
-                "#FF5722",
-                "#F06292",
-                "#F44336",
-                "#00BCD4",
-                "#1E88E5",
-                "#4CAF50",
-                "#FFEB3B",
-                "#3949AB"
+                "#546E7A"
             )
         )
         Collections.shuffle(colors)
@@ -2088,5 +2042,66 @@ class MapsActivity : AppCompatActivity(),
         return Color.parseColor(colors[random.nextInt(colors.size)])
     }
 
+    fun draw_flight(start_loc: LatLng, end: LatLng){
+        var cLat: Double = (start_loc.latitude + end.latitude) / 2
+        var cLon: Double = (start_loc.longitude + end.longitude) / 2
 
+        //add skew and arcHeight to move the midPoint
+
+        //add skew and arcHeight to move the midPoint
+        val start = start_loc
+
+        if (Math.abs(start.longitude - end.longitude) < 0.0001) {
+            cLon -= 0.0195
+        } else {
+            cLat += 0.0195
+        }
+
+        val tDelta = 1.0 / 100
+        var t = 0.0
+        val alLatLng: ArrayList<LatLng> = ArrayList()
+        if(distance_in_meters_to(start,end)>2000) {
+            while (t <= 1.0) {
+                val oneMinusT = 1.0 - t
+                val t2 = Math.pow(t, 2.0)
+                val lon: Double =
+                    oneMinusT * oneMinusT * start.longitude + 2 * oneMinusT * t * cLon + t2 * end.longitude
+                val lat: Double =
+                    oneMinusT * oneMinusT * start.latitude + 2 * oneMinusT * t * cLat + t2 * end.latitude
+                alLatLng.add(LatLng(lat, lon))
+                t += tDelta
+            }
+        }else{
+            alLatLng.add(start)
+        }
+        alLatLng.add(end)
+
+        // draw polyline
+
+        // draw polyline
+        val line = PolylineOptions()
+        line.width(5f)
+        line.color(Color.DKGRAY)
+        if (constants.SharedPreferenceManager(applicationContext).isDarkModeOn()) {
+            line.color(Color.LTGRAY)
+        }
+        line.addAll(alLatLng)
+        if (f != null) f!!.remove()
+        f = mMap.addPolyline(line)
+    }
+
+    fun trim_loaded_path(pathh: List<LatLng>): List<LatLng>{
+        val new_path = ArrayList<LatLng>()
+
+        var iter_pos = 0
+        var iter_ = (pathh.size/constants.max_step_size)
+
+        while (iter_pos<pathh.size){
+            val point = pathh.get(iter_pos)
+            new_path.add(point)
+            iter_pos+=iter_
+        }
+
+        return new_path
+    }
 }
