@@ -50,6 +50,8 @@ class Constants {
     val specific_route_end = "specific_route_end"
     val multiple_route_distance_limit = (30*1000)
     val max_step_size = 50
+    val eula = "https://bryonyoni.github.io/Matt-Eula/"
+    val priv_pol = "https://bryonyoni.github.io/Matt-Eula/privacy.html"
 
     fun touch_vibrate(context: Context?){
         val vibrator = context?.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
@@ -237,8 +239,5 @@ class Constants {
         val r: Resources = context.getResources()
         return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dip, r.getDisplayMetrics())
     }
-
-
-
 
 }

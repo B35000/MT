@@ -1,8 +1,10 @@
 package com.color.matt.Fragments
 
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -52,6 +54,8 @@ class MainSettings : Fragment() {
         val join_organisation_layout: RelativeLayout = va.findViewById(R.id.join_organisation_layout)
         val sign_in_layout: RelativeLayout = va.findViewById(R.id.sign_in_layout)
         val sign_in_view: RelativeLayout = va.findViewById(R.id.sign_in_view)
+        val privacy_layout: RelativeLayout = va.findViewById(R.id.privacy_layout)
+        val user_agreement_layout: RelativeLayout = va.findViewById(R.id.user_agreement_layout)
 
         val money: RelativeLayout = va.findViewById(R.id.money)
         money.setOnTouchListener { v, event -> true }
@@ -91,6 +95,30 @@ class MainSettings : Fragment() {
             app_vid.text = "Version ${version}"
         } catch (e: PackageManager.NameNotFoundException) {
             e.printStackTrace()
+        }
+
+
+
+        privacy_layout.setOnClickListener {
+            Constants().touch_vibrate(context)
+            try {
+                val url: String = Constants().priv_pol
+                val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                startActivity(webIntent)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        user_agreement_layout.setOnClickListener {
+            Constants().touch_vibrate(context)
+            try {
+                val url: String = Constants().eula
+                val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                startActivity(webIntent)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
 
 

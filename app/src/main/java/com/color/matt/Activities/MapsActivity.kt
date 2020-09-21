@@ -763,7 +763,6 @@ class MapsActivity : AppCompatActivity(),
         return (dp * Resources.getSystem().getDisplayMetrics().density).toInt()
     }
 
-
     class session_data(var organisations: ArrayList<organisation>,var routes: ArrayList<route>, var postitions: HashMap<String,ArrayList<driver_pos>>): Serializable
 
     fun store_session_data(){
